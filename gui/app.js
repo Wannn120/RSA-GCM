@@ -243,7 +243,6 @@ function renderDashboard() {
         ${supportLink('hybrid', 'Hybrid tanpa CRT', 'Bandingkan pembukaan kunci RSA biasa')}
         ${supportLink('send', 'Simulasi Alice–Bob', 'Lihat alur pesan lokal')}
         ${supportLink('tamper', 'Integritas data', 'Amati dampak perubahan byte')}
-        ${supportLink('about', 'Catatan presentasi', 'Rumus, konteks, dan batasan demo')}
       </div>
     </div>
   </div>`;
@@ -256,9 +255,19 @@ function renderDashboard() {
   });
 }
 
+function flowSteps(steps) {
+  return `<ol class="flow-steps">${steps.map((step, index) => `<li><span class="flow-number">${index + 1}</span><div><strong>${html(step.title)}</strong><small>${html(step.description)}</small></div></li>`).join('')}</ol>`;
+}
+
 function renderManualRsa() {
   content.innerHTML = `<div class="lab-layout">
     <header class="lab-intro"><div><span class="eyebrow">PERCOBAAN UTAMA 01</span><h1>Enkripsi RSA biasa</h1></div><p>Pesan diubah menjadi byte, dienkripsi per blok dengan public key, lalu Bob memulihkannya menggunakan private key.</p></header>
+    <section class="flow-panel"><h2>Alur pesan</h2>${flowSteps([
+      { title: 'Bentuk kunci', description: 'Pilih p dan q, hitung n dan φ(n), lalu tentukan e dan d.' },
+      { title: 'Ubah teks menjadi byte', description: 'Setiap byte UTF-8 menjadi satu blok pesan m.' },
+      { title: 'Enkripsi di Alice', description: 'Hitung c = m^e mod n dengan public key Bob.' },
+      { title: 'Kirim dan dekripsi di Bob', description: 'Kirim ciphertext; hitung m = c^d mod n untuk memulihkan teks.' }
+    ])}</section>
     <article class="panel experiment-card">
       <div class="panel-title"><span class="method-mark rsa-mark">RSA</span><span><strong>Simulasi percakapan Alice dan Bob</strong><small>Textbook RSA per byte untuk pembelajaran</small></span></div>
       <div class="panel-body">
@@ -304,6 +313,13 @@ function renderManualRsa() {
 function renderManualHybrid() {
   content.innerHTML = `<div class="lab-layout">
     <header class="lab-intro"><div><span class="eyebrow">PERCOBAAN UTAMA 02</span><h1>AES-GCM + RSA-CRT</h1></div><p>AES-GCM mengenkripsi isi pesan. RSA membungkus kunci sesi AES, dan Bob memakai CRT untuk membuka kunci itu sebelum mendekripsi pesan.</p></header>
+    <section class="flow-panel"><h2>Alur pesan hybrid</h2>${flowSteps([
+      { title: 'Buat kunci sesi AES', description: 'Alice menghasilkan kunci AES-256 acak dan IV baru.' },
+      { title: 'Enkripsi isi pesan', description: 'AES-GCM menghasilkan ciphertext dan authentication tag.' },
+      { title: 'Bungkus kunci untuk Bob', description: 'Public key RSA Bob mengenkripsi byte kunci sesi.' },
+      { title: 'Buka kunci dengan RSA-CRT', description: 'Bob menghitung residu modulo p dan q, lalu menggabungkannya untuk memulihkan kunci AES.' },
+      { title: 'Verifikasi dan baca pesan', description: 'AES-GCM memeriksa tag; jika valid, plaintext ditampilkan.' }
+    ])}</section>
     <article class="panel experiment-card">
       <div class="panel-title"><span class="method-mark hybrid-mark">HYB</span><span><strong>Simulasi percakapan Alice dan Bob</strong><small>AES melindungi pesan, RSA-CRT membuka kunci sesi</small></span></div>
       <div class="panel-body">
@@ -460,22 +476,6 @@ function renderModPow() {
     }
   });
 }
-
-function renderAbout() {
-  content.innerHTML = `<div class="chat-stack">
-    <div class="bubble"><strong>Urutan penjelasan saat presentasi</strong><p>Mulai dari tujuan RSA, lanjut ke p dan q, hitung n dan φ(n), pilih e, cari d memakai Extended Euclid, ubah teks ke byte, lalu tunjukkan enkripsi serta dekripsi.</p></div>
-    <section class="panel"><div class="panel-title">Poin yang penting dijelaskan</div><div class="panel-body">
-      <p><strong>1. BigInt</strong> dipakai karena JavaScript Number memiliki batas presisi bilangan bulat. BigInt menjaga operasi bilangan bulat tetap tepat.</p>
-      <p><strong>2. gcd</strong> memakai algoritma Euclid: pasangan (a, b) diganti menjadi (b, a mod b) sampai b = 0.</p>
-      <p><strong>3. Extended Euclid</strong> mencari x dan y sehingga ax + by = gcd(a,b). Saat gcd(e, φ) = 1, koefisien x menjadi calon invers e modulo φ.</p>
-      <p><strong>4. Modular exponentiation</strong> memakai square-and-multiply agar tidak membuat bilangan base^exponent secara langsung.</p>
-      <p><strong>5. Encoding pesan</strong> memakai UTF-8. Satu byte dijadikan satu blok agar alurnya mudah diamati saat tugas Matematika Diskrit.</p>
-      <div class="notice">Proyek ini untuk pembelajaran. Ukuran prima kecil, RSA per byte, checksum sederhana, dan demonstrasi hybrid bukan desain kriptografi produksi.</div>
-    </div></section>
-  </div>`;
-}
-
-
 
 function simpleChecksum(blocks) {
   let total = 0n;
@@ -805,6 +805,13 @@ function comparisonPanelMarkup() {
   return `<section class="panel comparison-panel">
       <div class="panel-title"><span class="method-mark experiment-mark">↔</span><span><strong>Eksperimen acak</strong><small>Bandingkan RSA biasa dengan AES-GCM + RSA-CRT</small></span></div>
       <div class="panel-body">
+      <p class="comparison-intro">Setiap putaran memakai pasangan prima, kunci RSA, dan pesan acak yang sama untuk kedua metode. Hasilnya dibandingkan dari waktu enkripsi/dekripsi, ukuran payload, dan keberhasilan pemulihan pesan.</p>
+      <div class="comparison-flow">${flowSteps([
+        { title: 'Buat sampel', description: 'Pilih p dan q acak yang menghasilkan n unik.' },
+        { title: 'Jalankan dua metode', description: 'Enkripsi pesan yang sama dengan RSA langsung dan hybrid AES-GCM + RSA-CRT.' },
+        { title: 'Ukur dan verifikasi', description: 'Catat waktu, payload, dan apakah pesan berhasil dipulihkan.' },
+        { title: 'Bandingkan hasil', description: 'Grafik merangkum rata-rata; tabel menunjukkan semua percobaan.' }
+      ])}</div>
       <div class="form-grid">
         <div class="field"><label for="compareRuns">Jumlah percobaan (1–1000)</label><input id="compareRuns" type="number" min="1" max="1000" value="100"></div>
         <div class="field"><label>Prima minimum (17 sampai 1.000.000)</label><input id="compareMinPrime" type="number" min="17" max="1000000" value="100"></div>
@@ -1023,8 +1030,7 @@ const pages = {
   modpow: ['Modular Power', 'Square-and-multiply dengan tabel jejak', renderModPow],
   hybrid: ['Hybrid RSA + AES-GCM', 'RSA membungkus kunci sesi, AES-GCM mengautentikasi pesan', renderHybrid],
   tamper: ['Perubahan Data', 'Hitung checksum dan bandingkan byte', renderTamper],
-  send: ['Pengiriman Pesan', 'Alice dan Bob bertukar pesan terenkripsi', renderSend],
-  about: ['Catatan Presentasi', 'Konsep, alasan implementasi, dan batasan', renderAbout]
+  send: ['Pengiriman Pesan', 'Alice dan Bob bertukar pesan terenkripsi', renderSend]
 };
 
 function go(page) {

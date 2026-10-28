@@ -310,12 +310,25 @@ body.light .code { background: #eef1f3; color: #1b2b34; }
 .primary-link strong, .primary-link small { display: block; }
 .primary-link small { margin-top: 4px; color: var(--muted); font-size: 11px; }
 .primary-link > b { color: var(--accent); font-size: 18px; }
+.flow-panel { padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); }
+.flow-panel h2 { margin: 0 0 12px; font-size: 14px; }
+.flow-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 9px; margin: 0; padding: 0; list-style: none; }
+.flow-steps li { position: relative; display: flex; align-items: flex-start; gap: 9px; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-3); }
+.flow-number { flex: 0 0 auto; display: grid; width: 24px; height: 24px; place-items: center; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 800; }
+.flow-steps li div { display: grid; gap: 4px; min-width: 0; }
+.flow-steps strong { font-size: 11px; }
+.flow-steps small { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.comparison-intro { margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.comparison-flow { margin-bottom: 12px; }
+.comparison-flow .flow-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.comparison-flow .flow-steps li { padding: 8px; }
 
 @media (max-width: 920px) {
   .app-shell { width: 100%; min-height: 100vh; margin: 0; grid-template-columns: 250px minmax(0, 1fr); }
   .form-grid, .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bubble { max-width: 94%; }
   .comparison-panel .chart-grid { grid-template-columns: 1fr; }
+  .comparison-flow .flow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .support-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -328,6 +341,7 @@ body.light .code { background: #eef1f3; color: #1b2b34; }
   .module-item { min-width: 220px; }
   .workspace { min-height: 0; }
   .form-grid, .form-grid.two, .metric-grid { grid-template-columns: 1fr; }
+  .flow-steps, .comparison-flow .flow-steps { grid-template-columns: 1fr; }
   .lab-intro { grid-template-columns: 1fr; }
   .comparison-panel .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .support-links { grid-template-columns: 1fr; }
