@@ -1,34 +1,38 @@
 'use strict';
 
-/*
-  Modul ini bukan hybrid encryption produksi.
-  Tujuannya memperagakan ide bahwa RSA biasanya dipakai untuk melindungi kunci,
-  sedangkan data besar memakai operasi yang lebih ringan.
-  Agar tidak menyembunyikan konsep di balik library, contoh memakai XOR sederhana.
-  XOR di sini hanya demonstrasi matematika dan tidak aman untuk data nyata.
-*/
-
 const { encryptNumber, decryptNumber } = require('./rsa');
+const { generateAesKey, encryptAesGcm, decryptAesGcm } = require('./aes-gcm');
 
-function xorBytes(bytes, keyByte) {
-  const k = Number(keyByte) & 255;
-  return bytes.map(byte => byte ^ k);
+const KEY_BYTES = 32;
+
+// Hybrid menggabungkan RSA untuk kunci sesi dan AES-GCM untuk isi pesan.
+function hybridEncrypt(text, publicKey) {
+  if (publicKey.n <= 255n) {
+    throw new RangeError('n RSA harus lebih besar dari 255 untuk membungkus byte kunci AES.');
+  }
+
+  const key = generateAesKey();
+  const encrypted = encryptAesGcm(text, key);
+  const wrappedKey = Array.from(key, byte => encryptNumber(BigInt(byte), publicKey));
+
+  return { ...encrypted, wrappedKey };
 }
 
-function hybridEncrypt(text, keyByte, publicKey) {
-  const k = BigInt(keyByte);
-  if (k < 0n || k > 255n) throw new RangeError('Kunci byte harus 0 sampai 255.');
-  if (k >= publicKey.n) throw new RangeError('n RSA harus lebih besar dari nilai kunci byte.');
-  const plainBytes = Array.from(Buffer.from(String(text), 'utf8'));
-  const dataCipher = xorBytes(plainBytes, Number(k));
-  const wrappedKey = encryptNumber(k, publicKey);
-  return { wrappedKey, dataCipher };
-}
-
+// Penerima membuka byte kunci dengan RSA sebelum meminta AES-GCM memeriksa tag.
 function hybridDecrypt(payload, privateKey) {
-  const keyByte = decryptNumber(payload.wrappedKey, privateKey);
-  const plainBytes = xorBytes(payload.dataCipher, Number(keyByte));
-  return { keyByte, text: Buffer.from(plainBytes).toString('utf8') };
+  if (!payload || !Array.isArray(payload.wrappedKey) || payload.wrappedKey.length !== KEY_BYTES) {
+    throw new TypeError(`wrappedKey harus berisi ${KEY_BYTES} blok RSA.`);
+  }
+
+  const key = Buffer.from(payload.wrappedKey.map((block, index) => {
+    const byte = decryptNumber(block, privateKey);
+    if (byte < 0n || byte > 255n) {
+      throw new RangeError(`Blok kunci AES ke-${index} bukan byte yang valid.`);
+    }
+    return Number(byte);
+  }));
+
+  return { text: decryptAesGcm(payload, key) };
 }
 
-module.exports = { xorBytes, hybridEncrypt, hybridDecrypt };
+module.exports = { hybridEncrypt, hybridDecrypt };

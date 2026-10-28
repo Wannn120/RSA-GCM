@@ -189,7 +189,7 @@ function keyForm(prefix = '') {
 
 function renderDashboard() {
   content.innerHTML = `<div class="chat-stack">
-    <div class="bubble"><strong>Apa yang dilakukan aplikasi ini?</strong><p>GUI menampilkan proses RSA dari pemilihan bilangan prima sampai teks kembali setelah dekripsi. Semua hitungan inti dijalankan di browser dengan BigInt dan JavaScript murni.</p></div>
+    <div class="bubble"><strong>Apa yang dilakukan aplikasi ini?</strong><p>GUI mempelajari RSA, AES-GCM mandiri, dan hybrid RSA + AES-GCM. Modul RSA menunjukkan hitungan dengan BigInt; AES-GCM menggunakan Web Crypto API bawaan browser.</p></div>
     <div class="bubble out"><strong>Contoh default</strong><p>p = 61, q = 53, e = 17. Contoh ini menghasilkan n = 3233, φ(n) = 3120, dan d = 2753.</p></div>
     <section class="panel">
       <div class="panel-title">Jalankan alur lengkap</div>
@@ -340,22 +340,12 @@ function renderAbout() {
       <p><strong>3. Extended Euclid</strong> mencari x dan y sehingga ax + by = gcd(a,b). Saat gcd(e, φ) = 1, koefisien x menjadi calon invers e modulo φ.</p>
       <p><strong>4. Modular exponentiation</strong> memakai square-and-multiply agar tidak membuat bilangan base^exponent secara langsung.</p>
       <p><strong>5. Encoding pesan</strong> memakai UTF-8. Satu byte dijadikan satu blok agar alurnya mudah diamati saat tugas Matematika Diskrit.</p>
-      <div class="notice">Proyek ini untuk pembelajaran. Ukuran prima kecil, blok per byte, checksum sederhana, dan demonstrasi hybrid bukan desain kriptografi produksi.</div>
+      <div class="notice">Proyek ini untuk pembelajaran. Ukuran prima kecil, RSA per byte, checksum sederhana, dan demonstrasi hybrid bukan desain kriptografi produksi.</div>
     </div></section>
   </div>`;
 }
 
 
-
-/*
-  XOR memberi contoh penggabungan tiap byte dengan kunci satu byte.
-  Pada setiap posisi, byte ciphertext = byte pesan XOR kunci.
-  XOR dengan kunci yang sama dua kali mengembalikan byte awal.
-  Mode ini hanya demonstrasi, bukan pengamanan yang aman.
-*/
-function xorByteArray(bytes, keyByte) {
-  return bytes.map(byte => Number(byte) ^ Number(keyByte));
-}
 
 function simpleChecksum(blocks) {
   let total = 0n;
@@ -368,31 +358,186 @@ function simpleChecksum(blocks) {
   return { total, steps };
 }
 
+// Browser memakai Web Crypto API agar halaman AES dapat berjalan tanpa library tambahan.
+async function encryptWithBrowserAesGcm(text) {
+  const rawKey = window.crypto.getRandomValues(new Uint8Array(32));
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const startedAt = performance.now();
+  const cryptoKey = await window.crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt']);
+  const encrypted = new Uint8Array(await window.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv, tagLength: 128 },
+    cryptoKey,
+    new TextEncoder().encode(text)
+  ));
+  const elapsedMs = performance.now() - startedAt;
+
+  return {
+    rawKey,
+    iv,
+    ciphertext: encrypted.slice(0, -16),
+    authTag: encrypted.slice(-16),
+    elapsedMs
+  };
+}
+
+// AES-GCM hanya mengeluarkan plaintext jika ciphertext dan tag cocok dengan kuncinya.
+async function decryptWithBrowserAesGcm(payload, rawKey) {
+  const startedAt = performance.now();
+  const cryptoKey = await window.crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt']);
+  const authenticated = new Uint8Array(payload.ciphertext.length + payload.authTag.length);
+  authenticated.set(payload.ciphertext);
+  authenticated.set(payload.authTag, payload.ciphertext.length);
+  const restored = await window.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: payload.iv, tagLength: 128 },
+    cryptoKey,
+    authenticated
+  );
+  return {
+    text: new TextDecoder('utf-8', { fatal: true }).decode(restored),
+    elapsedMs: performance.now() - startedAt
+  };
+}
+
+function bytesToHex(bytes) {
+  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function browserPayloadSize(payload) {
+  return new TextEncoder().encode(JSON.stringify(payload)).length;
+}
+
+// Membuat satu pesan hybrid: AES menyegel data, RSA membungkus tiap byte kunci sesi.
+async function encryptWithBrowserHybrid(text, key) {
+  const startedAt = performance.now();
+  const aesPayload = await encryptWithBrowserAesGcm(text);
+  if (key.n <= 255n) throw new Error('n RSA harus lebih besar dari 255 untuk membungkus byte kunci AES.');
+  const wrappedKey = Array.from(aesPayload.rawKey, byte => modPow(BigInt(byte), key.e, key.n));
+  const elapsedMs = performance.now() - startedAt;
+  return { ...aesPayload, wrappedKey, elapsedMs };
+}
+
+// Penerima membuka byte kunci RSA dahulu, lalu AES-GCM memeriksa tag pesan.
+async function decryptWithBrowserHybrid(payload, key) {
+  const startedAt = performance.now();
+  const rawKey = Uint8Array.from(payload.wrappedKey.map(block => {
+    const byte = modPow(block, key.d, key.n);
+    if (byte < 0n || byte > 255n) throw new Error('RSA menghasilkan byte kunci AES yang tidak valid.');
+    return Number(byte);
+  }));
+  const restored = await decryptWithBrowserAesGcm(payload, rawKey);
+  return { text: restored.text, elapsedMs: performance.now() - startedAt };
+}
+
+function requireBrowserCrypto() {
+  if (!window.crypto || !window.crypto.subtle) {
+    throw new Error('Web Crypto API tidak tersedia. Buka GUI melalui browser modern pada HTTPS atau localhost.');
+  }
+}
+
+function renderAesGcm() {
+  content.innerHTML = `<div class="chat-stack">
+    <div class="bubble"><strong>AES-256-GCM mandiri</strong><p>AES adalah enkripsi simetris: pengirim dan penerima memakai kunci rahasia yang sama. GCM juga menghasilkan authentication tag untuk mendeteksi ciphertext atau tag yang berubah.</p></div>
+    <section class="panel"><div class="panel-title">Uji AES-GCM tanpa RSA</div><div class="panel-body">
+      <div class="field"><label>Pesan</label><textarea id="aesText">Halo Matdis</textarea></div>
+      <div class="actions"><button class="action-button" id="runAes">Enkripsi dan Dekripsi AES</button></div><div id="aesResult"></div>
+    </div></section>
+  </div>`;
+  $('#runAes').addEventListener('click', async () => {
+    const target = $('#aesResult');
+    try {
+      requireBrowserCrypto();
+      const text = $('#aesText').value;
+      const encrypted = await encryptWithBrowserAesGcm(text);
+      const restored = await decryptWithBrowserAesGcm(encrypted, encrypted.rawKey);
+      const payload = {
+        iv: bytesToHex(encrypted.iv),
+        ciphertext: bytesToHex(encrypted.ciphertext),
+        authTag: bytesToHex(encrypted.authTag)
+      };
+      target.innerHTML = `<div class="code">Algoritma : AES-256-GCM\nKunci sesi: acak dan disimpan sementara, tidak ditampilkan\nIV        : ${payload.iv}\nCiphertext: ${payload.ciphertext}\nTag       : ${payload.authTag}\nWaktu enkripsi: ${encrypted.elapsedMs.toFixed(4)} ms\nWaktu dekripsi: ${restored.elapsedMs.toFixed(4)} ms\nHasil     : ${html(restored.text)}</div>
+        <div class="notice">Mode ini hanya memakai AES. Kedua pihak harus sudah berbagi kunci rahasia dengan cara yang aman; AES sendiri tidak mengirimkan kunci ke penerima.</div>`;
+    } catch (error) {
+      target.innerHTML = `<div class="error">${html(error.message)}</div>`;
+    }
+  });
+}
+
+function renderComparison() {
+  content.innerHTML = `<div class="chat-stack">
+    <div class="bubble"><strong>Perbandingan metode</strong><p>Pesan yang sama diproses dengan RSA per byte, AES-GCM mandiri, dan hybrid. Waktu hanya satu putaran di browser ini; angka dipengaruhi perangkat, browser, dan overhead, jadi bukan benchmark produksi.</p></div>
+    <section class="panel"><div class="panel-title">RSA vs AES-GCM vs Hybrid</div><div class="panel-body">
+      ${keyForm('cmp')}
+      <div class="field"><label>Pesan untuk dibandingkan</label><textarea id="compareText">Halo Matdis</textarea></div>
+      <div class="actions"><button class="action-button" id="runComparison">Bandingkan</button></div><div id="comparisonResult"></div>
+    </div></section>
+  </div>`;
+  $('#runComparison').addEventListener('click', async () => {
+    const target = $('#comparisonResult');
+    try {
+      requireBrowserCrypto();
+      const key = makeKey(big($('#cmpp').value, 'p'), big($('#cmpq').value, 'q'), big($('#cmpe').value, 'e'));
+      if (key.n <= 255n) throw new Error('Pilih p dan q sehingga n > 255 untuk RSA per byte.');
+      const text = $('#compareText').value;
+      const plain = encodeText(text);
+
+      const rsaStartedAt = performance.now();
+      const rsaCipher = encryptBlocks(plain, key);
+      const rsaEncryptMs = performance.now() - rsaStartedAt;
+      const rsaDecryptStartedAt = performance.now();
+      const rsaRestored = decodeText(decryptBlocks(rsaCipher, key));
+      const rsaDecryptMs = performance.now() - rsaDecryptStartedAt;
+
+      const aes = await encryptWithBrowserAesGcm(text);
+      const aesRestored = await decryptWithBrowserAesGcm(aes, aes.rawKey);
+      const hybrid = await encryptWithBrowserHybrid(text, key);
+      const hybridRestored = await decryptWithBrowserHybrid(hybrid, key);
+      const aesPayload = {
+        algorithm: 'aes-256-gcm',
+        iv: bytesToHex(aes.iv),
+        ciphertext: bytesToHex(aes.ciphertext),
+        authTag: bytesToHex(aes.authTag)
+      };
+      const hybridPayload = {
+        algorithm: 'aes-256-gcm',
+        wrappedKey: hybrid.wrappedKey.map(String),
+        iv: bytesToHex(hybrid.iv),
+        ciphertext: bytesToHex(hybrid.ciphertext),
+        authTag: bytesToHex(hybrid.authTag)
+      };
+      const rows = [
+        ['RSA per byte', rsaEncryptMs.toFixed(4), rsaDecryptMs.toFixed(4), browserPayloadSize(rsaCipher.map(String)), rsaRestored === text],
+        ['AES-256-GCM', aes.elapsedMs.toFixed(4), aesRestored.elapsedMs.toFixed(4), browserPayloadSize(aesPayload), aesRestored.text === text],
+        ['Hybrid RSA + AES-GCM', hybrid.elapsedMs.toFixed(4), hybridRestored.elapsedMs.toFixed(4), browserPayloadSize(hybridPayload), hybridRestored.text === text]
+      ];
+      target.innerHTML = `${keyMetrics(key)}
+        ${table(['Metode', 'Enkripsi (ms)', 'Dekripsi (ms)', 'Payload JSON (byte)', 'Round-trip benar'], rows)}
+        <div class="notice">RSA demo memakai p, q kecil dan RSA textbook tanpa padding per byte. Ukuran payload membandingkan format JSON contoh; overhead transport tidak disertakan. AES-GCM memerlukan kunci rahasia yang sudah dibagikan, sedangkan hybrid menyertakan kunci AES yang dibungkus RSA.</div>`;
+    } catch (error) {
+      target.innerHTML = `<div class="error">${html(error.message)}</div>`;
+    }
+  });
+}
+
 function renderHybrid() {
   content.innerHTML = `<div class="chat-stack">
-    <div class="bubble"><strong>Simulasi hybrid (bukan enkripsi aman)</strong><p>Kunci byte dilindungi secara konsep memakai RSA, sedangkan setiap byte pesan diubah dengan XOR. Contoh ini sengaja sederhana agar hitungannya dapat dijelaskan satu per satu.</p></div>
-    <section class="panel"><div class="panel-title">RSA + XOR per byte</div><div class="panel-body">
+    <div class="bubble"><strong>Simulasi hybrid RSA + AES-GCM</strong><p>AES-GCM mengenkripsi pesan dan memeriksa authentication tag. Kunci AES acak 256-bit dibungkus RSA buatan proyek per byte karena modulus contoh yang kecil tidak cukup untuk satu bilangan kunci utuh.</p></div>
+    <section class="panel"><div class="panel-title">RSA membungkus kunci sesi, AES-GCM mengenkripsi pesan</div><div class="panel-body">
       ${keyForm('hyb')}
-      <div class="form-grid two"><div class="field"><label>Kunci XOR (0 sampai 255)</label><input id="hybByte" value="42"></div></div>
       <div class="field"><label>Pesan</label><textarea id="hybText">Halo Matdis</textarea></div>
       <div class="actions"><button class="action-button" id="runHybrid">Proses Hybrid</button></div><div id="hybridResult"></div>
     </div></section></div>`;
-  $('#runHybrid').addEventListener('click', () => {
+  $('#runHybrid').addEventListener('click', async () => {
     const target = $('#hybridResult');
     try {
+      requireBrowserCrypto();
       const key = makeKey(big($('#hybp').value), big($('#hybq').value), big($('#hybe').value));
-      const k = big($('#hybByte').value, 'Kunci XOR');
-      if (k < 0n || k > 255n || k >= key.n) throw new Error('Kunci harus pada rentang 0 sampai 255 dan kurang dari n.');
       const text = $('#hybText').value;
-      const plain = encodeText(text);
-      const cipher = xorByteArray(plain, k);
-      const wrappedKey = modPow(k, key.e, key.n);
-      const restoredKey = modPow(wrappedKey, key.d, key.n);
-      const restored = xorByteArray(cipher, restoredKey);
+      const encrypted = await encryptWithBrowserHybrid(text, key);
+      const restored = await decryptWithBrowserHybrid(encrypted, key);
       target.innerHTML = `${keyMetrics(key)}
-        <div class="code">Kunci asli: ${k}\nRSA(k) = ${k}^${key.e} mod ${key.n} = ${wrappedKey}\nRSA⁻¹(RSA(k)) = ${wrappedKey}^${key.d} mod ${key.n} = ${restoredKey}\nPesan kembali: ${html(decodeText(restored.map(BigInt)))}</div>
-        ${table(['Index', 'Byte awal', 'Kunci XOR', 'Byte XOR', 'XOR ulang'], plain.map((b, i) => [i, b, k, cipher[i], restored[i]]))}
-        <div class="notice">XOR satu byte bisa dibalik tetapi tidak aman secara kriptografi. RSA di sini hanya menyandikan angka kunci untuk memperagakan alur hybrid.</div>`;
+        <div class="code">Algoritma data : AES-256-GCM\nKunci sesi     : dibuat acak, tidak ditampilkan\nBlok kunci RSA : ${encrypted.wrappedKey.join(', ')}\nIV             : ${bytesToHex(encrypted.iv)}\nCiphertext     : ${bytesToHex(encrypted.ciphertext)}\nAuthentication tag: ${bytesToHex(encrypted.authTag)}\nPesan kembali  : ${html(restored.text)}</div>
+        ${table(['Indeks byte kunci', `Hasil RSA (e=${key.e}, n=${key.n})`], encrypted.wrappedKey.map((block, i) => [i, block]))}
+        <div class="notice">AES-GCM menolak ciphertext atau tag yang diubah. Demo memakai RSA tanpa padding dan modulus kecil; RSA per byte hanya untuk menjelaskan alur, bukan pengamanan produksi.</div>`;
     } catch (error) { target.innerHTML = `<div class="error">${html(error.message)}</div>`; }
   });
 }
@@ -452,9 +597,11 @@ const pages = {
   dashboard: ['Ringkasan RSA', 'Semua data perhitungan ditampilkan', renderDashboard],
   keygen: ['Pembentukan Kunci', 'Euclid dan Extended Euclid terlihat langkah demi langkah', renderKeygen],
   message: ['Pesan RSA', 'Encoding UTF-8, cipher, dan hasil dekripsi', renderMessage],
+  aes: ['AES-GCM Mandiri', 'Enkripsi simetris tanpa RSA', renderAesGcm],
+  compare: ['Perbandingan Metode', 'RSA, AES-GCM, dan hybrid pada pesan yang sama', renderComparison],
   prime: ['Uji Prima', 'Trial division tanpa library eksternal', renderPrime],
   modpow: ['Modular Power', 'Square-and-multiply dengan tabel jejak', renderModPow],
-  hybrid: ['Hybrid RSA + XOR', 'Proses kunci dan byte data', renderHybrid],
+  hybrid: ['Hybrid RSA + AES-GCM', 'RSA membungkus kunci sesi, AES-GCM mengautentikasi pesan', renderHybrid],
   tamper: ['Perubahan Data', 'Hitung checksum dan bandingkan byte', renderTamper],
   send: ['Pengiriman Pesan', 'Alice dan Bob bertukar pesan terenkripsi', renderSend],
   about: ['Catatan Presentasi', 'Konsep, alasan implementasi, dan batasan', renderAbout]

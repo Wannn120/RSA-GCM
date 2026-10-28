@@ -14,7 +14,9 @@ Proyek Matematika Diskrit untuk mempelajari RSA melalui dua antarmuka yang terpi
 - Trace data lengkap untuk bahan presentasi.
 - Simulasi pengiriman antar pihak.
 - Simulasi perubahan blok dan checksum sederhana.
-- Demo konsep hybrid untuk pembelajaran.
+- Hybrid RSA + AES-256-GCM: RSA buatan proyek membungkus kunci sesi, AES-GCM mengenkripsi dan mengautentikasi pesan.
+- Demo AES-256-GCM mandiri untuk mempelajari enkripsi simetris tanpa RSA.
+- Perbandingan RSA, AES-GCM, dan hybrid pada pesan yang sama, termasuk waktu satu putaran dan ukuran payload contoh.
 - CLI interaktif dan CLI berbasis perintah.
 - GUI statis bergaya aplikasi percakapan dua panel.
 - Unit test dan self-check tanpa dependency eksternal.
@@ -23,7 +25,7 @@ Proyek Matematika Diskrit untuk mempelajari RSA melalui dua antarmuka yang terpi
 
 Node.js versi 18 atau lebih baru untuk CLI dan test.
 
-GUI cukup membutuhkan browser modern dan tidak membutuhkan Node.js saat dijalankan.
+GUI membutuhkan browser modern dengan Web Crypto API untuk demo AES-GCM. Browser harus mengizinkan `crypto.subtle` (misalnya pada HTTPS atau localhost). CLI dan test membutuhkan Node.js.
 
 ## Menjalankan CLI
 
@@ -48,6 +50,9 @@ node src/cli.js egcd 17 3120
 node src/cli.js modpow 65 17 3233
 node src/cli.js key 61 53 17
 node src/cli.js encrypt 61 53 17 "Halo Matdis"
+node src/cli.js aes "Halo Matdis"
+node src/cli.js hybrid 61 53 17 "Halo Matdis"
+node src/cli.js compare 61 53 17 "Halo Matdis"
 ```
 
 ## Menjalankan GUI
@@ -58,7 +63,7 @@ Buka file berikut dengan browser:
 gui/index.html
 ```
 
-Karena GUI hanya HTML, CSS, dan JavaScript statis, tidak ada proses instalasi dan tidak ada server yang wajib dijalankan.
+GUI hanya HTML, CSS, dan JavaScript statis, tanpa proses instalasi. Jika browser tidak menyediakan Web Crypto API saat file dibuka langsung, jalankan GUI dari konteks aman seperti localhost atau HTTPS.
 
 ## Menjalankan test
 
@@ -95,7 +100,7 @@ Public key adalah `(17, 3233)` dan private key adalah `(2753, 3233)`.
 
 Proyek tidak memiliki dependency eksternal. Semua algoritma matematika utama ditulis langsung agar mudah diterangkan saat presentasi.
 
-Modul bawaan Node.js yang digunakan hanya untuk pekerjaan pendukung seperti input terminal, testing, assertion, pengukuran waktu, dan encoding byte. Penjelasan rinci ada di `docs/PRESENTASI.md`.
+Modul bawaan Node.js yang digunakan meliputi `crypto` untuk AES-GCM dan kunci acak, serta modul pendukung untuk input terminal, testing, assertion, pengukuran waktu, dan encoding byte. Penjelasan rinci ada di `docs/PRESENTASI.md`.
 
 ## Catatan keamanan
 
@@ -114,6 +119,7 @@ matdis-rsa-lab/
     app.js
   src/
     benchmark.js
+    aes-gcm.js
     cli.js
     format.js
     hybrid.js
@@ -135,16 +141,20 @@ matdis-rsa-lab/
 
 ## Modul tambahan yang tersedia di CLI dan GUI
 
-- Hybrid RSA + XOR: menampilkan kunci XOR, hasil RSA untuk kunci, byte XOR, dan hasil pemulihan. Ini demonstrasi dan tidak aman untuk data nyata.
+- Hybrid RSA + AES-GCM: kunci sesi AES-256 acak dibungkus RSA buatan proyek; AES-GCM mengenkripsi pesan dan authentication tag memverifikasi integritasnya.
+- AES-GCM mandiri: mengenkripsi pesan dengan kunci simetris acak tanpa RSA.
+- Perbandingan: menjalankan RSA per byte, AES-GCM mandiri, dan hybrid pada masukan yang sama. Angka waktu hanya satu putaran demonstrasi, bukan benchmark statistik.
 - Perubahan data: checksum berbobot dan dampak mengubah satu byte. Checksum ini tidak menjamin integritas secara kriptografis.
 - Pengiriman pesan: simulasi lokal Alice ke Bob dengan public key dan private key. Tidak menggunakan jaringan sungguhan.
 
 CLI contoh:
 
 ```bash
-node src/cli.js hybrid 61 53 17 42 "Halo Matdis"
+node src/cli.js hybrid 61 53 17 "Halo Matdis"
 node src/cli.js tamper MATDIS 0 1
 node src/cli.js send 61 53 17 "Halo Bob"
 ```
 
-GUI menyediakan masing-masing modul lewat menu di sidebar. Struktur disusun sesuai fungsinya dan bukan salinan screenshot referensi.
+GUI menyediakan modul RSA, AES-GCM mandiri, perbandingan, dan hybrid lewat menu di sidebar. Struktur disusun sesuai fungsinya dan bukan salinan screenshot referensi.
+
+Hybrid ini khusus demonstrasi pendidikan: kunci AES 256-bit dibungkus RSA per byte agar dapat digunakan dengan modulus kecil contoh proyek. RSA textbook tanpa padding dan modulus kecil tidak aman untuk data nyata. Untuk aplikasi produksi, gunakan implementasi kriptografi teruji dengan RSA-OAEP (atau mekanisme pertukaran kunci modern) dan AES-GCM.

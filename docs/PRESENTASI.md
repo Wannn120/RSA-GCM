@@ -90,31 +90,50 @@ Tidak ada dependency eksternal dalam `package.json`.
 
 Node.js memakai beberapa modul bawaan:
 
+- `crypto` untuk kunci acak dan AES-GCM pada CLI.
 - `readline` untuk menerima input CLI interaktif.
 - `assert` untuk self-check sederhana.
 - `node:test` untuk menjalankan unit test.
 - `perf_hooks` untuk mengukur waktu benchmark.
 - `Buffer` adalah objek bawaan Node.js untuk konversi UTF-8 di sisi CLI.
 
-GUI tidak memakai framework, CDN, atau library eksternal. GUI hanya memakai HTML, CSS, JavaScript, `TextEncoder`, `TextDecoder`, dan `BigInt` bawaan browser.
+GUI tidak memakai framework, CDN, atau library eksternal. GUI memakai HTML, CSS, JavaScript, `TextEncoder`, `TextDecoder`, `BigInt`, dan Web Crypto API bawaan browser. Demo hybrid memerlukan browser yang menyediakan `crypto.subtle`, biasanya pada HTTPS atau localhost.
 
 ## Batasan yang perlu disampaikan
 
 RSA dalam proyek ini adalah implementasi pendidikan. Bilangan prima contoh sengaja kecil dan pesan diproses per byte agar prosesnya mudah diamati. Sistem nyata menggunakan bilangan jauh lebih besar, padding yang aman seperti OAEP atau PSS, dan implementasi kriptografi yang telah diaudit.
 
-Modul hybrid memakai XOR hanya untuk menggambarkan konsep pemisahan enkripsi kunci dan data. XOR satu byte bukan enkripsi aman.
+Proyek menyediakan tiga mode yang terpisah agar perannya mudah dibandingkan:
 
-## Menjelaskan simulasi hybrid RSA dan XOR
+1. RSA mandiri mengenkripsi setiap byte pesan memakai public key dan mendekripsinya memakai private key. Ini membantu mempelajari RSA, tetapi tidak cocok untuk pesan besar atau produksi.
+2. AES-GCM mandiri memakai satu kunci rahasia bersama untuk mengenkripsi dan mendekripsi. GCM juga menghasilkan authentication tag untuk mendeteksi perubahan data.
+3. Hybrid memakai AES-GCM untuk isi pesan dan RSA buatan proyek untuk membungkus kunci AES. Mode hybrid menunjukkan bagaimana dua jenis algoritma dapat digabungkan.
 
-Misalnya kunci XOR `k = 42`, public key RSA `(e, n) = (17, 3233)` dan private key `d = 2753`.
+Karena RSA contoh memakai modulus kecil, setiap byte dari kunci AES 32-byte dienkripsi sebagai blok RSA terpisah. Ini hanya demonstrasi alur; RSA textbook tanpa padding tidak aman.
 
-1. Program mengubah pesan menjadi byte UTF-8. Huruf `H` adalah byte 72.
-2. Program mengerjakan XOR antara byte pesan dan 42. Untuk `H`, hasilnya `72 XOR 42 = 98` (biner 01001000 XOR 00101010 = 01100010).
-3. Kunci XOR sendiri diproses melalui rumus RSA `42^17 mod 3233 = 2557`.
-4. Penerima memulihkan kunci dengan `2557^2753 mod 3233 = 42`.
-5. Penerima meng-XOR byte 98 dengan 42. Hasilnya kembali menjadi 72 atau `H`.
+## Menjelaskan simulasi hybrid RSA dan AES-GCM
 
-Penggabungan konsep RSA dan XOR ini **tidak aman untuk pemakaian nyata**. XOR satu byte mudah dibongkar, sementara RSA tanpa padding juga rentan. Tujuannya hanya mempermudah memahami beda peran algoritma asimetris dan simetris.
+1. Pengirim membuat kunci sesi AES-256 acak sepanjang 32 byte dan IV GCM acak sepanjang 12 byte.
+2. Kunci AES diubah menjadi 32 blok byte. Setiap byte `kᵢ` dibungkus dengan RSA buatan proyek, `cᵢ = kᵢ^e mod n`. Cara per byte ini diperlukan hanya karena modulus contoh `n = 3233` tidak cukup besar untuk menampung satu kunci AES sebagai bilangan.
+3. Pesan dienkripsi dengan AES-GCM menggunakan kunci sesi dan IV. Hasilnya mencakup ciphertext dan authentication tag 16 byte.
+4. Penerima membuka setiap blok kunci dengan `kᵢ = cᵢ^d mod n`, kemudian memakai kunci tersebut, IV, ciphertext, dan tag untuk dekripsi AES-GCM.
+5. Jika ciphertext atau tag berubah, pemeriksaan autentikasi gagal dan proses dekripsi menolak pesan.
+
+CLI menggunakan modul bawaan Node.js `crypto` (`createCipheriv` dan `createDecipheriv`). GUI menggunakan Web Crypto API bawaan browser untuk AES-GCM. RSA tetap memakai implementasi `modPow` proyek.
+
+## Membandingkan RSA, AES-GCM, dan hybrid
+
+Perintah `node src/cli.js compare 61 53 17 "Halo Matdis"` dan halaman Perbandingan di GUI memproses pesan yang sama dengan tiga mode. Output menunjukkan apakah round-trip mengembalikan teks yang sama, waktu enkripsi/dekripsi satu kali, dan ukuran serialisasi payload JSON contoh.
+
+Perbandingan konsep yang dapat disampaikan:
+
+- RSA mandiri memakai pasangan public/private key dan pada proyek ini mengubah setiap byte menjadi satu blok cipher. Payload angka RSA menjadi panjang dan operasi modular dilakukan untuk setiap byte.
+- AES-GCM mandiri cepat untuk isi pesan dan menyediakan authentication tag, tetapi penerima harus sudah memiliki kunci simetris yang sama.
+- Hybrid menggunakan AES-GCM untuk data dan membungkus kunci sesi dengan RSA. Dalam proyek ini setiap byte kunci dibungkus RSA hanya karena modulus pendidikan terlalu kecil untuk menampung kunci utuh.
+
+Waktu yang dicetak bukan kesimpulan performa umum. Pesan pendek, satu kali pengukuran, overhead browser/runtime, dan ukuran RSA kecil membuat angka sangat bergantung pada perangkat serta implementasi. Ukuran payload juga menghitung serialisasi JSON demonstrasi, bukan ukuran protokol jaringan nyata.
+
+Demonstrasi ini **tidak aman untuk pemakaian nyata**: RSA menggunakan bilangan prima kecil, enkripsi RSA textbook tanpa padding, dan pembungkusan per byte. Sistem produksi harus menggunakan library kriptografi yang diaudit, RSA-OAEP atau mekanisme pertukaran kunci modern, serta ukuran kunci yang sesuai.
 
 ## Menjelaskan checksum dan perubahan data
 

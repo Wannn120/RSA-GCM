@@ -12,7 +12,9 @@
 
 `message-codec.js` mengubah teks UTF-8 menjadi blok byte dan sebaliknya.
 
-`hybrid.js` mendemonstrasikan ide hybrid menggunakan RSA untuk melindungi kunci byte dan XOR untuk data. Modul ini hanya pendidikan.
+`aes-gcm.js` menjalankan AES-256-GCM mandiri, membuat kunci sesi acak, dan menolak data dengan authentication tag yang tidak valid.
+
+`hybrid.js` mendemonstrasikan hybrid RSA + AES-256-GCM. Kunci sesi AES acak dibungkus RSA per byte agar dapat digunakan dengan modulus kecil contoh proyek; modul ini hanya pendidikan.
 
 `tamper.js` berisi checksum sederhana dan fungsi mengubah satu blok untuk melihat efek perubahan data.
 
@@ -44,4 +46,4 @@ Tes memakai `node:test` bawaan Node.js. Tidak perlu Jest atau library lain.
 
 Folder dibagi berdasarkan tanggung jawab, bukan agar sesuai dengan tampilan referensi. CLI memanggil modul Node.js secara langsung. GUI menggunakan implementasi JavaScript browser yang mandiri sehingga tetap berjalan saat `index.html` dibuka tanpa server. Karena keduanya memiliki implementasi masing-masing, pengujian contoh penting perlu dilakukan pada keduanya agar tidak terjadi perbedaan hasil.
 
-Halaman GUI tambahan adalah Hybrid RSA + XOR, Perubahan Data, dan Pengiriman Pesan. Modul logika Node.js masing-masing tetap berada di `src/hybrid.js`, `src/tamper.js`, dan `src/server-simulator.js`.
+Halaman GUI tambahan mencakup AES-GCM mandiri, perbandingan RSA/AES/hybrid, Hybrid RSA + AES-GCM, Perubahan Data, dan Pengiriman Pesan. GUI memakai Web Crypto API bawaan browser untuk AES-GCM dan memerlukan browser modern dalam konteks aman yang menyediakan `crypto.subtle`. Modul logika Node.js masing-masing tetap berada di `src/aes-gcm.js`, `src/hybrid.js`, `src/tamper.js`, dan `src/server-simulator.js`.

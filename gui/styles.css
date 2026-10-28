@@ -45,14 +45,12 @@ button { color: inherit; }
 
 .app-shell {
   width: min(1480px, calc(100vw - 32px));
-  height: calc(100vh - 32px);
-  min-height: 680px;
+  min-height: calc(100vh - 32px);
   margin: 16px auto;
   display: grid;
   grid-template-columns: 380px minmax(0, 1fr);
   background: var(--panel);
   box-shadow: 0 12px 48px var(--shadow);
-  overflow: hidden;
 }
 
 .sidebar {
@@ -143,8 +141,8 @@ body.light .module-icon { color: #075e54; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #25d366; }
 
 .content {
-  flex: 1;
-  overflow: auto;
+  min-width: 0;
+  min-height: 0;
   padding: 24px clamp(16px, 4vw, 64px);
   background-color: var(--bg);
   background-image:
@@ -233,18 +231,18 @@ body.light .code { background: #eef1f3; color: #1b2b34; }
 .success { color: #25d366; font-weight: 700; }
 
 @media (max-width: 920px) {
-  .app-shell { width: 100vw; height: 100vh; min-height: 0; margin: 0; grid-template-columns: 290px minmax(0, 1fr); }
+  .app-shell { width: 100vw; min-height: 100vh; margin: 0; grid-template-columns: 290px minmax(0, 1fr); }
   .form-grid, .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bubble { max-width: 94%; }
 }
 
 @media (max-width: 680px) {
   body { background: var(--bg); }
-  .app-shell { display: block; overflow: auto; }
+  .app-shell { display: block; }
   .sidebar { border-right: 0; }
   .module-list { display: flex; overflow-x: auto; }
   .module-item { min-width: 220px; }
-  .workspace { min-height: 720px; }
+  .workspace { min-height: 0; }
   .form-grid, .form-grid.two, .metric-grid { grid-template-columns: 1fr; }
   .header-actions { display: none; }
 }

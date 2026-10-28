@@ -8,11 +8,19 @@ const { trialDivisionTrace } = require('./primality');
 const { gcdTrace, extendedGcd, modPowTrace } = require('./math');
 const { stringify, table } = require('./format');
 const { hybridEncrypt, hybridDecrypt } = require('./hybrid');
+const { generateAesKey, encryptAesGcm, decryptAesGcm } = require('./aes-gcm');
 const { checksum, tamperBlock } = require('./tamper');
 const { ServerSimulator } = require('./server-simulator');
 
 function printTitle(text) {
   console.log(`\n${text}`);
+}
+
+// Waktu ini menunjukkan satu eksekusi demonstrasi, bukan benchmark statistik.
+function measureMilliseconds(action) {
+  const start = process.hrtime.bigint();
+  const result = action();
+  return { result, elapsedMs: Number(process.hrtime.bigint() - start) / 1e6 };
 }
 
 function printKeyTrace(trace) {
@@ -91,7 +99,9 @@ Pemakaian:
   node src/cli.js modpow <base> <exp> <mod>
   node src/cli.js key <p> <q> [e]
   node src/cli.js encrypt <p> <q> <e> <pesan>
-  node src/cli.js hybrid <p> <q> <e> <kunciXOR> <pesan>
+  node src/cli.js aes <pesan>
+  node src/cli.js hybrid <p> <q> <e> <pesan>
+  node src/cli.js compare <p> <q> <e> <pesan>
   node src/cli.js tamper <pesan> <indexByte> <delta>
   node src/cli.js send <p> <q> <e> <pesan>
 
@@ -152,12 +162,82 @@ function runCommand(args) {
       console.log(`Dekripsi: ${decodeText(decryptBlocks(cipher, pair.privateKey))}`);
       return true;
     }
+    // Mode mandiri ini menunjukkan AES-GCM ketika kunci sesi sudah tersedia bersama.
+    case 'aes': {
+      const message = rest.join(' ');
+      const key = generateAesKey();
+      const encrypted = encryptAesGcm(message, key);
+      const restored = decryptAesGcm(encrypted, key);
+      console.log(stringify({
+        metode: 'AES-256-GCM mandiri',
+        payload: encrypted,
+        hasilDekripsi: restored,
+        catatan: 'Kunci sesi acak hanya disimpan sementara di memori dan tidak ditampilkan.'
+      }));
+      return true;
+    }
+    // Mode hybrid memakai RSA untuk kunci sesi dan AES-GCM untuk isi pesan.
     case 'hybrid': {
-      const [p, q, e, keyByte, ...parts] = rest;
+      const [p, q, e, ...parts] = rest;
       const pair = generateKeyPairFromPrimes(BigInt(p), BigInt(q), BigInt(e));
-      const payload = hybridEncrypt(parts.join(' '), BigInt(keyByte), pair.publicKey);
+      const payload = hybridEncrypt(parts.join(' '), pair.publicKey);
       const output = hybridDecrypt(payload, pair.privateKey);
-      console.log(stringify({ pesan: parts.join(' '), kunciXOR: keyByte, payload, hasil: output }));
+      console.log(stringify({
+        pesan: parts.join(' '),
+        payload,
+        hasil: output,
+        catatan: 'Demo pendidikan: RSA textbook membungkus tiap byte kunci AES; bukan skema produksi.'
+      }));
+      return true;
+    }
+    // Ketiga metode memakai teks yang sama agar hasil dan ukuran payload dapat dibandingkan.
+    case 'compare': {
+      const [p, q, e, ...parts] = rest;
+      const message = parts.join(' ');
+      const pair = generateKeyPairFromPrimes(BigInt(p), BigInt(q), BigInt(e));
+      if (pair.publicKey.n <= 255n) {
+        throw new Error('n harus lebih besar dari 255 untuk enkripsi RSA per byte.');
+      }
+
+      const rsaPlain = encodeText(message);
+      const rsaEncrypted = measureMilliseconds(() => encryptBlocks(rsaPlain, pair.publicKey));
+      const rsaDecrypted = measureMilliseconds(() => decryptBlocks(rsaEncrypted.result, pair.privateKey));
+      const aesKey = generateAesKey();
+      const aesEncrypted = measureMilliseconds(() => encryptAesGcm(message, aesKey));
+      const aesDecrypted = measureMilliseconds(() => decryptAesGcm(aesEncrypted.result, aesKey));
+      const hybridEncrypted = measureMilliseconds(() => hybridEncrypt(message, pair.publicKey));
+      const hybridDecrypted = measureMilliseconds(() => hybridDecrypt(hybridEncrypted.result, pair.privateKey));
+      const entries = [
+        {
+          metode: 'RSA textbook per byte',
+          enkripsiMs: rsaEncrypted.elapsedMs,
+          dekripsiMs: rsaDecrypted.elapsedMs,
+          ukuranPayloadByte: Buffer.byteLength(stringify(rsaEncrypted.result)),
+          hasil: decodeText(rsaDecrypted.result)
+        },
+        {
+          metode: 'AES-256-GCM mandiri',
+          enkripsiMs: aesEncrypted.elapsedMs,
+          dekripsiMs: aesDecrypted.elapsedMs,
+          ukuranPayloadByte: Buffer.byteLength(stringify(aesEncrypted.result)),
+          hasil: aesDecrypted.result
+        },
+        {
+          metode: 'Hybrid RSA + AES-256-GCM',
+          enkripsiMs: hybridEncrypted.elapsedMs,
+          dekripsiMs: hybridDecrypted.elapsedMs,
+          ukuranPayloadByte: Buffer.byteLength(stringify(hybridEncrypted.result)),
+          hasil: hybridDecrypted.result.text
+        }
+      ];
+
+      console.log(stringify({
+        pesan: message,
+        nRsa: pair.publicKey.n,
+        semuaHasilSama: entries.every(entry => entry.hasil === message),
+        perbandingan: entries,
+        catatan: 'Waktu satu kali eksekusi dan ukuran serialisasi contoh; bukan benchmark produksi. RSA memakai kunci kecil dan textbook per byte.'
+      }));
       return true;
     }
     case 'tamper': {

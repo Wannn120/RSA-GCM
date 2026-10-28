@@ -6,6 +6,7 @@ module.exports = {
   rsa: require('./rsa'),
   trace: require('./rsa-trace'),
   codec: require('./message-codec'),
+  aesGcm: require('./aes-gcm'),
   hybrid: require('./hybrid'),
   tamper: require('./tamper'),
   simulator: require('./server-simulator')
