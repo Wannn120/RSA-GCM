@@ -8,6 +8,7 @@ module.exports = {
   codec: require('./message-codec'),
   aesGcm: require('./aes-gcm'),
   hybrid: require('./hybrid'),
+  comparison: require('./comparison'),
   tamper: require('./tamper'),
   simulator: require('./server-simulator')
 };

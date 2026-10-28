@@ -3,6 +3,7 @@
 const { modPow, toBigInt } = require('./math');
 
 function isPrimeTrial(n) {
+  // Trial division menentukan prima dengan mencoba semua pembagi ganjil sampai √n.
   n = toBigInt(n);
   if (n < 2n) return false;
   if (n === 2n || n === 3n) return true;
@@ -15,6 +16,7 @@ function isPrimeTrial(n) {
 }
 
 function trialDivisionTrace(n) {
+  // Versi pembelajaran mengembalikan pembagi dan sisa yang sempat diuji.
   n = toBigInt(n);
   const tested = [];
   if (n < 2n) return { prime: false, reason: 'Bilangan kurang dari 2 bukan prima.', tested };
@@ -32,13 +34,16 @@ function trialDivisionTrace(n) {
 }
 
 function millerRabin(n, bases = [2n, 3n, 5n, 7n, 11n]) {
+  // Miller-Rabin adalah tes probabilistik; daftar basis memengaruhi kekuatan deteksinya.
   n = toBigInt(n);
+  // Tangani bilangan kecil dan faktor prima kecil sebelum pengujian modular.
   if (n < 2n) return false;
   for (const p of [2n, 3n, 5n, 7n, 11n, 13n, 17n, 19n, 23n, 29n, 31n, 37n]) {
     if (n === p) return true;
     if (n % p === 0n) return false;
   }
 
+  // Tulis n-1 = d*2^s dengan d ganjil, sesuai bentuk uji saksi Miller-Rabin.
   let d = n - 1n;
   let s = 0n;
   while (d % 2n === 0n) {
@@ -47,11 +52,13 @@ function millerRabin(n, bases = [2n, 3n, 5n, 7n, 11n]) {
   }
 
   for (const rawBase of bases) {
+    // Tiap basis menguji apakah n berperilaku seperti prima terhadap basis tersebut.
     const a = rawBase % n;
     if (a === 0n) continue;
     let x = modPow(a, d, n);
     if (x === 1n || x === n - 1n) continue;
 
+    // Kuadratkan berturut-turut; menemukan n-1 berarti basis ini belum membuktikan komposit.
     let witnessFound = true;
     for (let r = 1n; r < s; r++) {
       x = (x * x) % n;

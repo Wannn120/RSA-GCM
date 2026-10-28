@@ -1,7 +1,7 @@
 {
   "name": "matdis-rsa-lab",
   "version": "1.0.0",
-  "description": "Laboratorium Matematika Diskrit RSA dengan CLI dan GUI statis tanpa dependency eksternal",
+  "description": "Laboratorium pendidikan RSA, CRT, dan AES-GCM dengan eksperimen CLI dan GUI statis",
   "type": "commonjs",
   "main": "src/index.js",
   "scripts": {

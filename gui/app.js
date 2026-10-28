@@ -11,6 +11,7 @@ const state = {
   key: null,
   lastMessage: null
 };
+let lastComparisonRows = [];
 
 const $ = selector => document.querySelector(selector);
 const content = $('#content');
@@ -26,6 +27,7 @@ function big(value, label = 'nilai') {
 function abs(n) { return n < 0n ? -n : n; }
 
 function gcdTrace(a, b) {
+  // Nilai absolut menyederhanakan pembagian; algoritma berhenti ketika sisa menjadi nol.
   a = abs(a);
   b = abs(b);
   const steps = [];
@@ -40,6 +42,7 @@ function gcdTrace(a, b) {
 }
 
 function extendedGcd(a, b) {
+  // oldR/r menyimpan sisa; oldS/s dan oldT/t melacak koefisien identitas Bezout.
   let oldR = a;
   let r = b;
   let oldS = 1n;
@@ -59,11 +62,13 @@ function extendedGcd(a, b) {
 }
 
 function positiveMod(n, m) {
+  // JavaScript BigInt dapat memberi sisa negatif; normalisasi menghasilkan rentang [0, m).
   const r = n % m;
   return r < 0n ? r + m : r;
 }
 
 function modInverse(a, m) {
+  // Koefisien x dari Extended Euclid adalah invers jika gcd(a,m) sama dengan satu.
   const result = extendedGcd(a, m);
   if (result.gcd !== 1n) throw new Error(`Invers tidak ada karena gcd(${a}, ${m}) = ${result.gcd}.`);
   return positiveMod(result.x, m);
@@ -72,6 +77,7 @@ function modInverse(a, m) {
 function modPowTrace(base, exponent, modulus) {
   if (modulus <= 0n) throw new Error('Modulus harus positif.');
   if (exponent < 0n) throw new Error('Eksponen tidak boleh negatif.');
+  // Square-and-multiply mengolah bit eksponen tanpa membentuk pangkat yang sangat besar.
   let result = 1n;
   let b = positiveMod(base, modulus);
   let e = exponent;
@@ -93,6 +99,7 @@ function modPow(base, exponent, modulus) {
 }
 
 function primeTrace(n) {
+  // Trial division mencoba pembagi sampai akar n dan menyimpan jejak untuk pembelajaran.
   const tested = [];
   if (n < 2n) return { prime: false, reason: 'Bilangan kurang dari 2 bukan prima.', tested };
   if (n === 2n) return { prime: true, reason: '2 adalah bilangan prima.', tested };
@@ -106,12 +113,14 @@ function primeTrace(n) {
 }
 
 function makeKey(p, q, requestedE) {
+  // Kunci harus dibangun dari prima berbeda; validasi dilakukan sebelum operasi modular.
   const pCheck = primeTrace(p);
   const qCheck = primeTrace(q);
   if (!pCheck.prime) throw new Error(`p = ${p} bukan prima.`);
   if (!qCheck.prime) throw new Error(`q = ${q} bukan prima.`);
   if (p === q) throw new Error('p dan q harus berbeda.');
 
+  // n dipakai sebagai modulus RSA dan phi dipakai untuk mencari inverse e.
   const n = p * q;
   const phi = (p - 1n) * (q - 1n);
   let e = requestedE;
@@ -127,21 +136,25 @@ function makeKey(p, q, requestedE) {
   const gcdInfo = gcdTrace(e, phi);
   if (gcdInfo.gcd !== 1n) throw new Error(`e tidak relatif prima terhadap φ(n). gcd = ${gcdInfo.gcd}.`);
 
+  // Simpan jejak Extended Euclid agar GUI dapat menjelaskan asal private exponent d.
   const egcd = extendedGcd(e, phi);
   const d = modInverse(e, phi);
   return { p, q, n, phi, e, d, gcdInfo, egcd };
 }
 
 function encodeText(text) {
+  // RSA demo memproses byte UTF-8 satu per satu, bukan karakter JavaScript.
   return Array.from(new TextEncoder().encode(text), byte => BigInt(byte));
 }
 
 function decodeText(blocks) {
+  // Byte hasil RSA dikembalikan ke UTF-8 untuk menyusun teks semula.
   const bytes = Uint8Array.from(blocks.map(v => Number(v)));
   return new TextDecoder().decode(bytes);
 }
 
 function encryptBlocks(blocks, key) {
+  // Terapkan public operation RSA ke setiap byte; setiap m wajib lebih kecil dari n.
   return blocks.map(m => {
     if (m >= key.n) throw new Error(`Blok ${m} tidak lebih kecil dari n = ${key.n}. Gunakan p dan q lebih besar.`);
     return modPow(m, key.e, key.n);
@@ -149,7 +162,28 @@ function encryptBlocks(blocks, key) {
 }
 
 function decryptBlocks(blocks, key) {
+  // Cara RSA biasa memakai satu eksponen privat d modulo n untuk setiap blok.
   return blocks.map(c => modPow(c, key.d, key.n));
+}
+
+// CRT memecah dekripsi RSA menjadi dua eksponensial lebih kecil lalu menggabungkan hasilnya.
+function decryptBlockWithCrtTrace(cipher, key) {
+  // dp dan dq mengecilkan eksponen privat dengan teorema Fermat.
+  const dp = positiveMod(key.d, key.p - 1n);
+  const dq = positiveMod(key.d, key.q - 1n);
+  // Invers q modulo p diperlukan untuk menggabungkan residu yang dihitung terpisah.
+  const qInverse = modInverse(key.q, key.p);
+  // Hitung sisa plaintext di bawah p dan q.
+  const m1 = modPow(cipher, dp, key.p);
+  const m2 = modPow(cipher, dq, key.q);
+  // Cari koreksi h sehingga m2 + h*q cocok dengan m1 modulo p.
+  const h = positiveMod(qInverse * (m1 - m2), key.p);
+  // Hasil akhir cocok pada kedua modulus prima, sehingga menjadi plaintext modulo n.
+  return { dp, dq, m1, m2, h, message: m2 + h * key.q };
+}
+
+function decryptBlocksCrt(blocks, key) {
+  return blocks.map(cipher => decryptBlockWithCrtTrace(cipher, key).message);
 }
 
 function html(value) {
@@ -360,10 +394,12 @@ function simpleChecksum(blocks) {
 
 // Browser memakai Web Crypto API agar halaman AES dapat berjalan tanpa library tambahan.
 async function encryptWithBrowserAesGcm(text) {
+  // Web Crypto membuat key 256-bit dan IV 96-bit baru untuk operasi enkripsi ini.
   const rawKey = window.crypto.getRandomValues(new Uint8Array(32));
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
   const startedAt = performance.now();
   const cryptoKey = await window.crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt']);
+  // API browser mengembalikan ciphertext diikuti tag 128-bit dalam satu buffer.
   const encrypted = new Uint8Array(await window.crypto.subtle.encrypt(
     { name: 'AES-GCM', iv, tagLength: 128 },
     cryptoKey,
@@ -384,6 +420,7 @@ async function encryptWithBrowserAesGcm(text) {
 async function decryptWithBrowserAesGcm(payload, rawKey) {
   const startedAt = performance.now();
   const cryptoKey = await window.crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['decrypt']);
+  // Web Crypto mengharapkan ciphertext || authenticationTag dalam satu input.
   const authenticated = new Uint8Array(payload.ciphertext.length + payload.authTag.length);
   authenticated.set(payload.ciphertext);
   authenticated.set(payload.authTag, payload.ciphertext.length);
@@ -406,8 +443,162 @@ function browserPayloadSize(payload) {
   return new TextEncoder().encode(JSON.stringify(payload)).length;
 }
 
+// Random integer memakai rejection sampling agar batas rentang tidak condong oleh modulo.
+function browserRandomInt(minimum, maximum) {
+  // Buang sampel di ujung rentang 32-bit agar pemetaan modulo tidak bias.
+  const range = maximum - minimum + 1;
+  const limit = Math.floor(4294967296 / range) * range;
+  const sample = new Uint32Array(1);
+  let value;
+  do {
+    window.crypto.getRandomValues(sample);
+    value = sample[0];
+  } while (value >= limit);
+  return minimum + (value % range);
+}
+
+// Sieve menyiapkan daftar prima untuk pengambilan acak tanpa mencoba prima satu per satu.
+function browserListPrimes(minimum, maximum) {
+  // Sieve menandai bilangan komposit sekali; percobaan berikutnya tinggal mengambil dari daftar.
+  const sieve = new Uint8Array(maximum + 1);
+  sieve.fill(1, 2);
+  for (let factor = 2; factor * factor <= maximum; factor++) {
+    if (!sieve[factor]) continue;
+    for (let multiple = factor * factor; multiple <= maximum; multiple += factor) {
+      sieve[multiple] = 0;
+    }
+  }
+  const primes = [];
+  for (let candidate = minimum; candidate <= maximum; candidate++) {
+    if (sieve[candidate]) primes.push(BigInt(candidate));
+  }
+  return primes;
+}
+
+function browserRandomMessage(byteLength) {
+  // Pesan berupa ASCII printable supaya jumlah karakter sama dengan jumlah byte yang diminta.
+  const bytes = window.crypto.getRandomValues(new Uint8Array(byteLength));
+  return Array.from(bytes, byte => String.fromCharCode(32 + (byte % 95))).join('');
+}
+
+function validateComparisonSettings(settings) {
+  // Batasi jumlah iterasi dan alokasi agar eksperimen dapat dijalankan di browser biasa.
+  const check = (value, label, min, max) => {
+    if (!Number.isSafeInteger(value) || value < min || value > max) {
+      throw new Error(`${label} harus bilangan bulat antara ${min} dan ${max}.`);
+    }
+  };
+  check(settings.runs, 'Jumlah putaran', 1, 1000);
+  check(settings.minPrime, 'Prima minimum', 17, 1000000);
+  check(settings.maxPrime, 'Prima maksimum', 17, 1000000);
+  check(settings.messageBytes, 'Ukuran pesan', 1, 4096);
+  if (settings.minPrime >= settings.maxPrime) throw new Error('Prima minimum harus lebih kecil dari prima maksimum.');
+}
+
+function comparisonStats(rows, property) {
+  // Urutan diperlukan untuk median; rata-rata/min/max memakai sampel yang sama.
+  const values = rows.map(row => row[property]).sort((a, b) => a - b);
+  const middle = Math.floor(values.length / 2);
+  return {
+    mean: values.reduce((sum, value) => sum + value, 0) / values.length,
+    median: values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2,
+    min: values[0],
+    max: values[values.length - 1]
+  };
+}
+
+function comparisonChart(title, rsaValue, hybridValue, unit) {
+  // Panjang batang dinormalisasi relatif terhadap nilai terbesar untuk metrik ini.
+  const maximum = Math.max(rsaValue, hybridValue, Number.EPSILON);
+  const bar = (label, value, className) => `<div class="chart-row">
+    <span>${label}</span>
+    <div class="bar-track"><div class="bar-fill ${className}" style="width:${Math.max(value / maximum * 100, value > 0 ? 1 : 0)}%"></div></div>
+    <strong>${value.toFixed(4)} ${unit}</strong>
+  </div>`;
+  return `<section class="bar-chart"><h3>${title}</h3>
+    ${bar('RSA biasa', rsaValue, 'rsa')}
+    ${bar('RSA + AES + CRT', hybridValue, 'hybrid')}
+  </section>`;
+}
+
+function renderComparisonResults(settings, rows) {
+  // Ringkas waktu, payload, dan biaya membuat kunci untuk ditampilkan sebagai statistik.
+  const stats = {
+    rsaEncryptMs: comparisonStats(rows, 'rsaEncryptMs'),
+    rsaDecryptMs: comparisonStats(rows, 'rsaDecryptMs'),
+    rsaPayloadBytes: comparisonStats(rows, 'rsaPayloadBytes'),
+    hybridEncryptMs: comparisonStats(rows, 'hybridEncryptMs'),
+    hybridDecryptCrtMs: comparisonStats(rows, 'hybridDecryptCrtMs'),
+    hybridPayloadBytes: comparisonStats(rows, 'hybridPayloadBytes'),
+    keyGenerationMs: comparisonStats(rows, 'keyGenerationMs')
+  };
+  // Tabel ringkas menyandingkan empat statistik untuk setiap metrik utama.
+  const overviewRows = [
+    ['Enkripsi', 'ms', stats.rsaEncryptMs, stats.hybridEncryptMs],
+    ['Dekripsi', 'ms', stats.rsaDecryptMs, stats.hybridDecryptCrtMs],
+    ['Ukuran payload JSON', 'byte', stats.rsaPayloadBytes, stats.hybridPayloadBytes]
+  ].flatMap(([metric, unit, rsa, hybrid]) => [
+    [`${metric} rata-rata (${unit})`, rsa.mean, hybrid.mean],
+    [`${metric} median (${unit})`, rsa.median, hybrid.median],
+    [`${metric} minimum (${unit})`, rsa.min, hybrid.min],
+    [`${metric} maksimum (${unit})`, rsa.max, hybrid.max]
+  ]);
+  // Tabel detail mempertahankan setiap sampel agar dapat dianalisis satu per satu.
+  const dataRows = rows.map(row => [
+    row.run, row.p, row.q, row.n, row.messageBytes, row.keyGenerationMs.toFixed(6),
+    row.rsaEncryptMs.toFixed(6), row.rsaDecryptMs.toFixed(6), row.rsaPayloadBytes,
+    row.hybridEncryptMs.toFixed(6), row.hybridDecryptCrtMs.toFixed(6), row.hybridPayloadBytes,
+    row.rsaRoundTrip, row.hybridRoundTrip
+  ]);
+  const allPassed = rows.every(row => row.rsaRoundTrip && row.hybridRoundTrip);
+
+  return `<div class="metric-grid">
+      <div class="metric"><span>Jumlah percobaan</span><strong>${settings.runs}</strong></div>
+      <div class="metric"><span>Rentang prima p, q</span><strong>${settings.minPrime} sampai ${settings.maxPrime}</strong></div>
+      <div class="metric"><span>Rentang modulus n</span><strong>${Math.min(...rows.map(row => Number(row.n)))} sampai ${Math.max(...rows.map(row => Number(row.n)))}</strong></div>
+      <div class="metric"><span>Panjang pesan acak</span><strong>${settings.messageBytes} byte</strong></div>
+      <div class="metric"><span>Rata-rata buat kunci RSA (bersama)</span><strong>${stats.keyGenerationMs.mean.toFixed(4)} ms</strong></div>
+      <div class="metric"><span>Round-trip</span><strong>${allPassed ? 'Semua berhasil' : 'Ada yang gagal'}</strong></div>
+    </div>
+    <div class="chart-grid">
+      ${comparisonChart('Rata-rata waktu enkripsi', stats.rsaEncryptMs.mean, stats.hybridEncryptMs.mean, 'ms')}
+      ${comparisonChart('Rata-rata waktu dekripsi', stats.rsaDecryptMs.mean, stats.hybridDecryptCrtMs.mean, 'ms')}
+      ${comparisonChart('Rata-rata ukuran payload JSON', stats.rsaPayloadBytes.mean, stats.hybridPayloadBytes.mean, 'byte')}
+    </div>
+    <h3>Ringkasan statistik</h3>
+    ${table(['Ukuran', 'RSA biasa', 'RSA + AES + CRT'], overviewRows)}
+    <h3>Data semua percobaan</h3>
+    ${table(
+      ['No', 'p', 'q', 'n', 'Pesan byte', 'Buat kunci ms', 'RSA enkripsi ms', 'RSA dekripsi ms', 'RSA payload byte', 'Hybrid enkripsi ms', 'Hybrid dekripsi CRT ms', 'Hybrid payload byte', 'RSA benar', 'Hybrid benar'],
+      dataRows
+    )}
+    <div class="notice">Semua nilai p, q, n, pesan, dan kunci dibuat acak pada setiap putaran. Waktu pembuatan kunci ditampilkan terpisah karena pasangan yang sama dipakai kedua metode. Pengukuran satu putaran per sampel dan prima kecil hanya untuk pengamatan pendidikan, bukan benchmark produksi.</div>`;
+}
+
+function downloadComparisonCsv() {
+  // CSV mengekspor baris mentah, sehingga hasil eksperimen bisa dianalisis di spreadsheet.
+  if (lastComparisonRows.length === 0) return;
+  const columns = [
+    'run', 'p', 'q', 'n', 'messageBytes', 'keyGenerationMs',
+    'rsaEncryptMs', 'rsaDecryptMs', 'rsaPayloadBytes',
+    'hybridEncryptMs', 'hybridDecryptCrtMs', 'hybridPayloadBytes',
+    'rsaRoundTrip', 'hybridRoundTrip'
+  ];
+  const escape = value => `"${String(value).replaceAll('"', '""')}"`;
+  const csv = [columns, ...lastComparisonRows.map(row => columns.map(column => row[column]))]
+    .map(row => row.map(escape).join(','))
+    .join('\r\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'perbandingan-rsa-hybrid.csv';
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 // Membuat satu pesan hybrid: AES menyegel data, RSA membungkus tiap byte kunci sesi.
 async function encryptWithBrowserHybrid(text, key) {
+  // Catat total tahap hybrid, termasuk pembuatan key AES dan pembungkusan RSA per byte.
   const startedAt = performance.now();
   const aesPayload = await encryptWithBrowserAesGcm(text);
   if (key.n <= 255n) throw new Error('n RSA harus lebih besar dari 255 untuk membungkus byte kunci AES.');
@@ -418,10 +609,24 @@ async function encryptWithBrowserHybrid(text, key) {
 
 // Penerima membuka byte kunci RSA dahulu, lalu AES-GCM memeriksa tag pesan.
 async function decryptWithBrowserHybrid(payload, key) {
+  // Pulihkan key 32 byte melalui RSA biasa, lalu serahkan validasi tag kepada AES-GCM.
   const startedAt = performance.now();
   const rawKey = Uint8Array.from(payload.wrappedKey.map(block => {
     const byte = modPow(block, key.d, key.n);
     if (byte < 0n || byte > 255n) throw new Error('RSA menghasilkan byte kunci AES yang tidak valid.');
+    return Number(byte);
+  }));
+  const restored = await decryptWithBrowserAesGcm(payload, rawKey);
+  return { text: restored.text, elapsedMs: performance.now() - startedAt };
+}
+
+// Varian hybrid ini membuka blok kunci AES dengan CRT, kemudian tetap memakai AES-GCM.
+async function decryptWithBrowserHybridCrt(payload, key) {
+  // Varian ini identik dari sisi payload, tetapi membuka tiap blok kunci memakai CRT.
+  const startedAt = performance.now();
+  const rawKey = Uint8Array.from(payload.wrappedKey.map(block => {
+    const byte = decryptBlockWithCrtTrace(block, key).message;
+    if (byte < 0n || byte > 255n) throw new Error('RSA-CRT menghasilkan byte kunci AES yang tidak valid.');
     return Number(byte);
   }));
   const restored = await decryptWithBrowserAesGcm(payload, rawKey);
@@ -462,60 +667,168 @@ function renderAesGcm() {
   });
 }
 
-function renderComparison() {
+function renderCrt() {
   content.innerHTML = `<div class="chat-stack">
-    <div class="bubble"><strong>Perbandingan metode</strong><p>Pesan yang sama diproses dengan RSA per byte, AES-GCM mandiri, dan hybrid. Waktu hanya satu putaran di browser ini; angka dipengaruhi perangkat, browser, dan overhead, jadi bukan benchmark produksi.</p></div>
-    <section class="panel"><div class="panel-title">RSA vs AES-GCM vs Hybrid</div><div class="panel-body">
-      ${keyForm('cmp')}
-      <div class="field"><label>Pesan untuk dibandingkan</label><textarea id="compareText">Halo Matdis</textarea></div>
-      <div class="actions"><button class="action-button" id="runComparison">Bandingkan</button></div><div id="comparisonResult"></div>
+    <div class="bubble"><strong>Dekripsi RSA dengan Chinese Remainder Theorem</strong><p>CRT tidak mengganti algoritma RSA atau mempercepat enkripsi. CRT mempercepat dekripsi dengan menghitung modulo p dan q secara terpisah, lalu menggabungkan kedua residu.</p></div>
+    <section class="panel"><div class="panel-title">RSA biasa dibanding RSA-CRT</div><div class="panel-body">
+      ${keyForm('crt')}
+      <div class="field"><label>Pesan</label><textarea id="crtText">Halo CRT</textarea></div>
+      <div class="actions"><button class="action-button" id="runCrt">Proses RSA dan CRT</button></div><div id="crtResult"></div>
     </div></section>
   </div>`;
-  $('#runComparison').addEventListener('click', async () => {
-    const target = $('#comparisonResult');
+  $('#runCrt').addEventListener('click', () => {
+    const target = $('#crtResult');
     try {
-      requireBrowserCrypto();
-      const key = makeKey(big($('#cmpp').value, 'p'), big($('#cmpq').value, 'q'), big($('#cmpe').value, 'e'));
-      if (key.n <= 255n) throw new Error('Pilih p dan q sehingga n > 255 untuk RSA per byte.');
-      const text = $('#compareText').value;
+      const key = makeKey(big($('#crtp').value, 'p'), big($('#crtq').value, 'q'), big($('#crte').value, 'e'));
+      if (key.n <= 255n) throw new Error('Gunakan kunci dengan n > 255 untuk enkripsi pesan per byte.');
+      const text = $('#crtText').value;
       const plain = encodeText(text);
-
-      const rsaStartedAt = performance.now();
-      const rsaCipher = encryptBlocks(plain, key);
-      const rsaEncryptMs = performance.now() - rsaStartedAt;
-      const rsaDecryptStartedAt = performance.now();
-      const rsaRestored = decodeText(decryptBlocks(rsaCipher, key));
-      const rsaDecryptMs = performance.now() - rsaDecryptStartedAt;
-
-      const aes = await encryptWithBrowserAesGcm(text);
-      const aesRestored = await decryptWithBrowserAesGcm(aes, aes.rawKey);
-      const hybrid = await encryptWithBrowserHybrid(text, key);
-      const hybridRestored = await decryptWithBrowserHybrid(hybrid, key);
-      const aesPayload = {
-        algorithm: 'aes-256-gcm',
-        iv: bytesToHex(aes.iv),
-        ciphertext: bytesToHex(aes.ciphertext),
-        authTag: bytesToHex(aes.authTag)
-      };
-      const hybridPayload = {
-        algorithm: 'aes-256-gcm',
-        wrappedKey: hybrid.wrappedKey.map(String),
-        iv: bytesToHex(hybrid.iv),
-        ciphertext: bytesToHex(hybrid.ciphertext),
-        authTag: bytesToHex(hybrid.authTag)
-      };
-      const rows = [
-        ['RSA per byte', rsaEncryptMs.toFixed(4), rsaDecryptMs.toFixed(4), browserPayloadSize(rsaCipher.map(String)), rsaRestored === text],
-        ['AES-256-GCM', aes.elapsedMs.toFixed(4), aesRestored.elapsedMs.toFixed(4), browserPayloadSize(aesPayload), aesRestored.text === text],
-        ['Hybrid RSA + AES-GCM', hybrid.elapsedMs.toFixed(4), hybridRestored.elapsedMs.toFixed(4), browserPayloadSize(hybridPayload), hybridRestored.text === text]
-      ];
+      const cipher = encryptBlocks(plain, key);
+      const startedStandard = performance.now();
+      const standard = decryptBlocks(cipher, key);
+      const standardMs = performance.now() - startedStandard;
+      const startedCrt = performance.now();
+      const traces = cipher.map(value => decryptBlockWithCrtTrace(value, key));
+      const crtMs = performance.now() - startedCrt;
+      const restored = traces.map(trace => trace.message);
+      const rows = cipher.map((value, index) => {
+        const trace = traces[index];
+        return [index, plain[index], value, standard[index], trace.dp, trace.dq, trace.m1, trace.m2, trace.h, trace.message];
+      });
       target.innerHTML = `${keyMetrics(key)}
-        ${table(['Metode', 'Enkripsi (ms)', 'Dekripsi (ms)', 'Payload JSON (byte)', 'Round-trip benar'], rows)}
-        <div class="notice">RSA demo memakai p, q kecil dan RSA textbook tanpa padding per byte. Ukuran payload membandingkan format JSON contoh; overhead transport tidak disertakan. AES-GCM memerlukan kunci rahasia yang sudah dibagikan, sedangkan hybrid menyertakan kunci AES yang dibungkus RSA.</div>`;
+        <div class="code">dp = d mod (p - 1) = ${positiveMod(key.d, key.p - 1n)}\ndq = d mod (q - 1) = ${positiveMod(key.d, key.q - 1n)}\nq⁻¹ mod p = ${modInverse(key.q, key.p)}\nPenggabungan: h = q⁻¹(m1 - m2) mod p, m = m2 + hq\nWaktu dekripsi RSA biasa: ${standardMs.toFixed(4)} ms\nWaktu dekripsi RSA-CRT: ${crtMs.toFixed(4)} ms\nHasil RSA biasa: ${html(decodeText(standard))}\nHasil RSA-CRT: ${html(decodeText(restored))}</div>
+        ${table(['i', 'Byte asli', 'Cipher c', 'RSA biasa', 'dp', 'dq', 'm1 mod p', 'm2 mod q', 'h', 'Hasil CRT'], rows)}
+        <div class="notice">Enkripsi sama pada kedua varian. CRT mengubah operasi private-key saat dekripsi. Pengukuran satu pesan pendek ini hanya demonstrasi; hasil waktu dapat berubah antar perangkat.</div>`;
     } catch (error) {
       target.innerHTML = `<div class="error">${html(error.message)}</div>`;
     }
   });
+}
+
+function renderComparison() {
+  content.innerHTML = `<div class="chat-stack">
+    <div class="bubble"><strong>Eksperimen RSA vs RSA + AES-GCM + CRT</strong><p>Setiap putaran membuat p dan q prima secara acak, sehingga n berubah. Kedua metode memakai pasangan kunci dan pesan acak yang sama. Pada metode hybrid, RSA membungkus kunci AES dan CRT dipakai saat membuka kunci tersebut.</p></div>
+    <section class="panel"><div class="panel-title">Atur banyak percobaan acak</div><div class="panel-body">
+      <div class="form-grid">
+        <div class="field"><label>Jumlah putaran (1 sampai 1000)</label><input id="compareRuns" type="number" min="1" max="1000" value="100"></div>
+        <div class="field"><label>Prima minimum (17 sampai 1.000.000)</label><input id="compareMinPrime" type="number" min="17" max="1000000" value="100"></div>
+        <div class="field"><label>Prima maksimum (17 sampai 1.000.000)</label><input id="compareMaxPrime" type="number" min="17" max="1000000" value="999"></div>
+        <div class="field"><label>Panjang pesan acak (byte, 1 sampai 4096)</label><input id="compareMessageBytes" type="number" min="1" max="4096" value="128"></div>
+      </div>
+      <div class="actions"><button class="action-button" id="runComparison">Jalankan Eksperimen</button><button class="action-button secondary" id="downloadComparison" type="button" disabled>Unduh CSV</button></div>
+      <div id="comparisonResult"></div>
+    </div></section>
+  </div>`;
+  $('#runComparison').addEventListener('click', async () => {
+    const target = $('#comparisonResult');
+    const button = $('#runComparison');
+    try {
+      requireBrowserCrypto();
+      // Input diparsing sebagai angka dan divalidasi sebelum kerja kriptografi dimulai.
+      const settings = {
+        runs: Number($('#compareRuns').value),
+        minPrime: Number($('#compareMinPrime').value),
+        maxPrime: Number($('#compareMaxPrime').value),
+        messageBytes: Number($('#compareMessageBytes').value)
+      };
+      validateComparisonSettings(settings);
+      // Cek jumlah pasangan prima agar setiap putaran dapat memperoleh n yang belum dipakai.
+      const primes = browserListPrimes(settings.minPrime, settings.maxPrime);
+      if (primes.length < 2) throw new Error('Rentang prima harus memuat setidaknya dua bilangan prima berbeda.');
+      const distinctModuli = (primes.length * (primes.length - 1)) / 2;
+      if (settings.runs > distinctModuli) {
+        throw new Error(`Rentang ini hanya menyediakan ${distinctModuli} pasangan n unik. Kurangi percobaan atau perlebar rentang.`);
+      }
+      // Kunci tombol untuk mencegah dua batch berjalan bersamaan dan mencampur hasil.
+      button.disabled = true;
+      $('#downloadComparison').disabled = true;
+      lastComparisonRows = [];
+      target.innerHTML = '<div class="notice" id="comparisonProgress">Menyiapkan eksperimen acak...</div>';
+      const rows = [];
+      const usedModuli = new Set();
+
+      // Satu putaran: buat n baru, lalu jalankan dua skema pada kunci dan pesan yang sama.
+      for (let index = 0; index < settings.runs; index++) {
+        let p;
+        let q;
+        let modulus;
+        let foundUniqueModulus = false;
+        for (let attempt = 0; attempt < 10000; attempt++) {
+          p = primes[browserRandomInt(0, primes.length - 1)];
+          q = primes[browserRandomInt(0, primes.length - 1)];
+          if (p === q) continue;
+          modulus = (p * q).toString();
+          if (usedModuli.has(modulus)) continue;
+          foundUniqueModulus = true;
+          break;
+        }
+        if (!foundUniqueModulus) {
+          throw new Error('Rentang prima terlalu sempit untuk menghasilkan n unik sebanyak itu. Kurangi percobaan atau perlebar rentang.');
+        }
+        usedModuli.add(modulus);
+        // Pembuatan pasangan RSA dicatat tersendiri, bukan dimasukkan hanya ke satu skema.
+        const keyStartedAt = performance.now();
+        const key = makeKey(p, q, null);
+        const keyGenerationMs = performance.now() - keyStartedAt;
+        const message = browserRandomMessage(settings.messageBytes);
+        const plain = encodeText(message);
+
+        // RSA mandiri memproses byte pesan satu per satu dengan public exponent e.
+        const rsaEncryptStartedAt = performance.now();
+        const rsaCipher = encryptBlocks(plain, key);
+        const rsaEncryptMs = performance.now() - rsaEncryptStartedAt;
+        const rsaDecryptStartedAt = performance.now();
+        const rsaRestored = decodeText(decryptBlocks(rsaCipher, key));
+        const rsaDecryptMs = performance.now() - rsaDecryptStartedAt;
+        const rsaPayloadBytes = browserPayloadSize(rsaCipher.map(String));
+
+        // Hybrid memakai AES untuk data; dekripsi kunci sesi memakai implementasi CRT lokal.
+        const hybrid = await encryptWithBrowserHybrid(message, key);
+        const hybridRestored = await decryptWithBrowserHybridCrt(hybrid, key);
+        const hybridEncryptMs = hybrid.elapsedMs;
+        const hybridDecryptCrtMs = hybridRestored.elapsedMs;
+        const hybridPayloadBytes = browserPayloadSize({
+          algorithm: 'aes-256-gcm',
+          wrappedKey: hybrid.wrappedKey.map(String),
+          iv: bytesToHex(hybrid.iv),
+          ciphertext: bytesToHex(hybrid.ciphertext),
+          authTag: bytesToHex(hybrid.authTag)
+        });
+
+        // Simpan faktor, modulus, ukuran data, waktu, ukuran payload, dan validitas hasil.
+        rows.push({
+          run: index + 1,
+          p: p.toString(),
+          q: q.toString(),
+          n: key.n.toString(),
+          messageBytes: new TextEncoder().encode(message).length,
+          keyGenerationMs,
+          rsaEncryptMs,
+          rsaDecryptMs,
+          rsaPayloadBytes,
+          hybridEncryptMs,
+          hybridDecryptCrtMs,
+          hybridPayloadBytes,
+          rsaRoundTrip: rsaRestored === message,
+          hybridRoundTrip: hybridRestored.text === message
+        });
+        // Beri browser kesempatan memperbarui progress selama batch panjang berlangsung.
+        if ((index + 1) % 5 === 0 || index + 1 === settings.runs) {
+          $('#comparisonProgress').textContent = `Percobaan selesai: ${index + 1} dari ${settings.runs}`;
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+
+      lastComparisonRows = rows;
+      $('#downloadComparison').disabled = false;
+      target.innerHTML = renderComparisonResults(settings, rows);
+    } catch (error) {
+      target.innerHTML = `<div class="error">${html(error.message)}</div>`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+  $('#downloadComparison').addEventListener('click', downloadComparisonCsv);
 }
 
 function renderHybrid() {
@@ -598,7 +911,8 @@ const pages = {
   keygen: ['Pembentukan Kunci', 'Euclid dan Extended Euclid terlihat langkah demi langkah', renderKeygen],
   message: ['Pesan RSA', 'Encoding UTF-8, cipher, dan hasil dekripsi', renderMessage],
   aes: ['AES-GCM Mandiri', 'Enkripsi simetris tanpa RSA', renderAesGcm],
-  compare: ['Perbandingan Metode', 'RSA, AES-GCM, dan hybrid pada pesan yang sama', renderComparison],
+  crt: ['Dekripsi RSA-CRT', 'Bandingkan RSA biasa dengan CRT', renderCrt],
+  compare: ['Eksperimen Acak', 'RSA biasa vs RSA + AES-GCM + CRT dengan banyak nilai n', renderComparison],
   prime: ['Uji Prima', 'Trial division tanpa library eksternal', renderPrime],
   modpow: ['Modular Power', 'Square-and-multiply dengan tabel jejak', renderModPow],
   hybrid: ['Hybrid RSA + AES-GCM', 'RSA membungkus kunci sesi, AES-GCM mengautentikasi pesan', renderHybrid],

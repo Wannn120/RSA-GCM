@@ -11,12 +11,14 @@ Proyek Matematika Diskrit untuk mempelajari RSA melalui dua antarmuka yang terpi
 - Modular exponentiation memakai square-and-multiply.
 - Encoding dan decoding UTF-8.
 - Enkripsi dan dekripsi pesan per byte.
+- Dekripsi RSA dengan Chinese Remainder Theorem (CRT) dan perbandingan terhadap RSA biasa.
 - Trace data lengkap untuk bahan presentasi.
 - Simulasi pengiriman antar pihak.
 - Simulasi perubahan blok dan checksum sederhana.
 - Hybrid RSA + AES-256-GCM: RSA buatan proyek membungkus kunci sesi, AES-GCM mengenkripsi dan mengautentikasi pesan.
 - Demo AES-256-GCM mandiri untuk mempelajari enkripsi simetris tanpa RSA.
-- Perbandingan RSA, AES-GCM, dan hybrid pada pesan yang sama, termasuk waktu satu putaran dan ukuran payload contoh.
+- Eksperimen batch dua skema: RSA biasa dan hybrid RSA + AES-GCM dengan dekripsi kunci memakai CRT.
+- Data acak dengan nilai modulus n unik, ringkasan statistik, grafik batang, tabel setiap percobaan, dan ekspor CSV.
 - CLI interaktif dan CLI berbasis perintah.
 - GUI statis bergaya aplikasi percakapan dua panel.
 - Unit test dan self-check tanpa dependency eksternal.
@@ -50,10 +52,14 @@ node src/cli.js egcd 17 3120
 node src/cli.js modpow 65 17 3233
 node src/cli.js key 61 53 17
 node src/cli.js encrypt 61 53 17 "Halo Matdis"
+node src/cli.js encrypt-crt 61 53 17 "Halo Matdis"
 node src/cli.js aes "Halo Matdis"
 node src/cli.js hybrid 61 53 17 "Halo Matdis"
-node src/cli.js compare 61 53 17 "Halo Matdis"
+node src/cli.js hybrid-crt 61 53 17 "Halo Matdis"
+node src/cli.js compare 100 100 999 128
 ```
+
+Argumen perintah `compare` adalah jumlah percobaan, prima minimum, prima maksimum, dan ukuran pesan dalam byte. Semua argumen opsional; nilai default-nya 100, 100, 999, dan 128. Jumlah percobaan dibatasi sampai 1000, nilai prima sampai 1.000.000, dan ukuran pesan sampai 4096 byte.
 
 ## Menjalankan GUI
 
@@ -143,7 +149,7 @@ matdis-rsa-lab/
 
 - Hybrid RSA + AES-GCM: kunci sesi AES-256 acak dibungkus RSA buatan proyek; AES-GCM mengenkripsi pesan dan authentication tag memverifikasi integritasnya.
 - AES-GCM mandiri: mengenkripsi pesan dengan kunci simetris acak tanpa RSA.
-- Perbandingan: menjalankan RSA per byte, AES-GCM mandiri, dan hybrid pada masukan yang sama. Angka waktu hanya satu putaran demonstrasi, bukan benchmark statistik.
+- Perbandingan: menjalankan RSA biasa dan hybrid RSA + AES-GCM dengan RSA-CRT untuk dekripsi kunci. Setiap putaran memakai pasangan prima, modulus n, dan pesan acak yang unik. GUI menampilkan ringkasan, grafik batang, semua baris hasil, serta ekspor CSV; CLI menampilkan data batch JSON.
 - Perubahan data: checksum berbobot dan dampak mengubah satu byte. Checksum ini tidak menjamin integritas secara kriptografis.
 - Pengiriman pesan: simulasi lokal Alice ke Bob dengan public key dan private key. Tidak menggunakan jaringan sungguhan.
 
@@ -155,6 +161,8 @@ node src/cli.js tamper MATDIS 0 1
 node src/cli.js send 61 53 17 "Halo Bob"
 ```
 
-GUI menyediakan modul RSA, AES-GCM mandiri, perbandingan, dan hybrid lewat menu di sidebar. Struktur disusun sesuai fungsinya dan bukan salinan screenshot referensi.
+GUI menyediakan modul RSA, AES-GCM mandiri, dekripsi RSA-CRT, perbandingan dua skema melalui eksperimen acak, dan hybrid lewat menu di sidebar. Struktur disusun sesuai fungsinya dan bukan salinan screenshot referensi.
 
 Hybrid ini khusus demonstrasi pendidikan: kunci AES 256-bit dibungkus RSA per byte agar dapat digunakan dengan modulus kecil contoh proyek. RSA textbook tanpa padding dan modulus kecil tidak aman untuk data nyata. Untuk aplikasi produksi, gunakan implementasi kriptografi teruji dengan RSA-OAEP (atau mekanisme pertukaran kunci modern) dan AES-GCM.
+
+Eksperimen acak juga bukan benchmark produksi. Pengukuran setiap sampel hanya dilakukan satu kali, ukuran RSA dibatasi agar uji manual tetap responsif, dan runtime/browser/perangkat memengaruhi angka. CRT mengoptimalkan dekripsi RSA; pada bilangan kecil overhead penggabungan residu dapat membuatnya tampak lebih lambat.

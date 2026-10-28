@@ -7,6 +7,7 @@
 */
 
 function toBigInt(value, name = 'nilai') {
+  // Konversi terpusat agar input invalid mendapatkan error yang konsisten.
   try {
     return typeof value === 'bigint' ? value : BigInt(value);
   } catch {
@@ -15,11 +16,13 @@ function toBigInt(value, name = 'nilai') {
 }
 
 function abs(n) {
+  // Normalisasi tanda diperlukan oleh gcd dan fungsi modulo.
   n = toBigInt(n);
   return n < 0n ? -n : n;
 }
 
 function gcd(a, b) {
+  // Algoritma Euclid mengganti (a,b) dengan (b, a mod b) sampai b habis.
   a = abs(a);
   b = abs(b);
   while (b !== 0n) {
@@ -31,6 +34,7 @@ function gcd(a, b) {
 }
 
 function gcdTrace(a, b) {
+  // Sama dengan gcd, tetapi setiap pembagian disimpan agar bisa dijelaskan di GUI/CLI.
   a = abs(a);
   b = abs(b);
   const steps = [];
@@ -45,9 +49,11 @@ function gcdTrace(a, b) {
 }
 
 function extendedGcd(a, b) {
+  // Menghasilkan gcd dan koefisien x,y yang memenuhi a*x + b*y = gcd(a,b).
   a = toBigInt(a);
   b = toBigInt(b);
 
+  // oldR/r adalah pasangan Euclid; oldS/s dan oldT/t adalah koefisien untuk a dan b.
   let oldR = a;
   let r = b;
   let oldS = 1n;
@@ -57,8 +63,10 @@ function extendedGcd(a, b) {
   const steps = [];
 
   while (r !== 0n) {
+    // q adalah hasil bagi; baris ini menjadi satu langkah tabel Extended Euclid.
     const q = oldR / r;
     steps.push({ q, oldR, r, oldS, s, oldT, t });
+    // Terapkan relasi sisa baru, sekaligus perbarui koefisien Bezout yang sejalan.
     [oldR, r] = [r, oldR - q * r];
     [oldS, s] = [s, oldS - q * s];
     [oldT, t] = [t, oldT - q * t];
@@ -74,6 +82,7 @@ function extendedGcd(a, b) {
 }
 
 function mod(n, m) {
+  // Pastikan hasil selalu dalam bentuk residu non-negatif, termasuk untuk n negatif.
   n = toBigInt(n);
   m = toBigInt(m);
   if (m === 0n) throw new RangeError('Modulus tidak boleh 0.');
@@ -82,6 +91,7 @@ function mod(n, m) {
 }
 
 function modInverse(a, m) {
+  // Invers hanya ada jika gcd(a,m)=1; koefisien x Extended Euclid menjadi inversnya.
   a = toBigInt(a);
   m = toBigInt(m);
   if (m <= 1n) throw new RangeError('Modulus invers harus lebih besar dari 1.');
@@ -93,12 +103,14 @@ function modInverse(a, m) {
 }
 
 function modPow(base, exponent, modulus) {
+  // Validasi memastikan square-and-multiply tidak menerima operasi yang tak terdefinisi.
   base = toBigInt(base);
   exponent = toBigInt(exponent);
   modulus = toBigInt(modulus);
   if (modulus <= 0n) throw new RangeError('Modulus harus positif.');
   if (exponent < 0n) throw new RangeError('Eksponen tidak boleh negatif.');
 
+  // Pangkat modular dihitung dari bit terbawah: kalikan bila ganjil, lalu kuadratkan base.
   let result = 1n;
   base = mod(base, modulus);
 
@@ -111,12 +123,14 @@ function modPow(base, exponent, modulus) {
 }
 
 function modPowTrace(base, exponent, modulus) {
+  // Versi berjejak menghasilkan jawaban sama dengan modPow sambil menyimpan tiap iterasi.
   base = toBigInt(base);
   exponent = toBigInt(exponent);
   modulus = toBigInt(modulus);
   if (modulus <= 0n) throw new RangeError('Modulus harus positif.');
   if (exponent < 0n) throw new RangeError('Eksponen tidak boleh negatif.');
 
+  // currentExponent terus dibagi dua; currentBase dikuadratkan pada setiap putaran.
   let result = 1n;
   let currentBase = mod(base, modulus);
   let currentExponent = exponent;
@@ -140,6 +154,7 @@ function modPowTrace(base, exponent, modulus) {
 }
 
 function lcm(a, b) {
+  // Bagi lebih dulu dengan gcd untuk mengurangi besaran perkalian antara.
   a = toBigInt(a);
   b = toBigInt(b);
   if (a === 0n || b === 0n) return 0n;

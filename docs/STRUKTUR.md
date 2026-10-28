@@ -8,6 +8,8 @@
 
 `rsa.js` berisi pembentukan pasangan kunci, enkripsi, dekripsi, serta tanda tangan angka sederhana.
 
+Modul `rsa.js` juga menyediakan dekripsi RSA-CRT yang menghitung residu modulo p dan q lalu menggabungkannya. Enkripsi RSA tetap sama.
+
 `rsa-trace.js` menghasilkan data jejak untuk menjelaskan langkah pembentukan kunci dan modular exponentiation.
 
 `message-codec.js` mengubah teks UTF-8 menjadi blok byte dan sebaliknya.
@@ -15,6 +17,8 @@
 `aes-gcm.js` menjalankan AES-256-GCM mandiri, membuat kunci sesi acak, dan menolak data dengan authentication tag yang tidak valid.
 
 `hybrid.js` mendemonstrasikan hybrid RSA + AES-256-GCM. Kunci sesi AES acak dibungkus RSA per byte agar dapat digunakan dengan modulus kecil contoh proyek; modul ini hanya pendidikan.
+
+`comparison.js` menjalankan batch perbandingan RSA biasa dengan hybrid RSA + AES-GCM/CRT. Generator menghasilkan p, q, modulus n unik, dan pesan acak, lalu menyimpan statistik serta data tiap sampel.
 
 `tamper.js` berisi checksum sederhana dan fungsi mengubah satu blok untuk melihat efek perubahan data.
 
@@ -46,4 +50,4 @@ Tes memakai `node:test` bawaan Node.js. Tidak perlu Jest atau library lain.
 
 Folder dibagi berdasarkan tanggung jawab, bukan agar sesuai dengan tampilan referensi. CLI memanggil modul Node.js secara langsung. GUI menggunakan implementasi JavaScript browser yang mandiri sehingga tetap berjalan saat `index.html` dibuka tanpa server. Karena keduanya memiliki implementasi masing-masing, pengujian contoh penting perlu dilakukan pada keduanya agar tidak terjadi perbedaan hasil.
 
-Halaman GUI tambahan mencakup AES-GCM mandiri, perbandingan RSA/AES/hybrid, Hybrid RSA + AES-GCM, Perubahan Data, dan Pengiriman Pesan. GUI memakai Web Crypto API bawaan browser untuk AES-GCM dan memerlukan browser modern dalam konteks aman yang menyediakan `crypto.subtle`. Modul logika Node.js masing-masing tetap berada di `src/aes-gcm.js`, `src/hybrid.js`, `src/tamper.js`, dan `src/server-simulator.js`.
+Halaman GUI tambahan mencakup AES-GCM mandiri, dekripsi RSA-CRT, eksperimen perbandingan RSA biasa dengan hybrid RSA + AES-GCM/CRT, Hybrid RSA + AES-GCM, Perubahan Data, dan Pengiriman Pesan. Halaman perbandingan menampilkan grafik batang, statistik, tabel data lengkap, serta ekspor CSV. GUI memakai Web Crypto API bawaan browser untuk AES-GCM dan memerlukan browser modern dalam konteks aman yang menyediakan `crypto.subtle`. Modul logika Node.js masing-masing tetap berada di `src/aes-gcm.js`, `src/comparison.js`, `src/hybrid.js`, `src/tamper.js`, dan `src/server-simulator.js`.

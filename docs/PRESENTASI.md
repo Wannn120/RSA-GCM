@@ -103,11 +103,12 @@ GUI tidak memakai framework, CDN, atau library eksternal. GUI memakai HTML, CSS,
 
 RSA dalam proyek ini adalah implementasi pendidikan. Bilangan prima contoh sengaja kecil dan pesan diproses per byte agar prosesnya mudah diamati. Sistem nyata menggunakan bilangan jauh lebih besar, padding yang aman seperti OAEP atau PSS, dan implementasi kriptografi yang telah diaudit.
 
-Proyek menyediakan tiga mode yang terpisah agar perannya mudah dibandingkan:
+Proyek menyediakan metode mandiri dan hybrid agar perannya mudah dibandingkan:
 
 1. RSA mandiri mengenkripsi setiap byte pesan memakai public key dan mendekripsinya memakai private key. Ini membantu mempelajari RSA, tetapi tidak cocok untuk pesan besar atau produksi.
-2. AES-GCM mandiri memakai satu kunci rahasia bersama untuk mengenkripsi dan mendekripsi. GCM juga menghasilkan authentication tag untuk mendeteksi perubahan data.
-3. Hybrid memakai AES-GCM untuk isi pesan dan RSA buatan proyek untuk membungkus kunci AES. Mode hybrid menunjukkan bagaimana dua jenis algoritma dapat digabungkan.
+2. RSA-CRT memakai enkripsi RSA yang sama, tetapi mempercepat dekripsi dengan menghitung modulo p dan q lalu menggabungkan hasil memakai CRT.
+3. AES-GCM mandiri memakai satu kunci rahasia bersama untuk mengenkripsi dan mendekripsi. GCM juga menghasilkan authentication tag untuk mendeteksi perubahan data.
+4. Hybrid memakai AES-GCM untuk isi pesan dan RSA buatan proyek untuk membungkus kunci AES. Varian hybrid RSA-CRT memakai CRT ketika penerima membuka kunci AES.
 
 Karena RSA contoh memakai modulus kecil, setiap byte dari kunci AES 32-byte dienkripsi sebagai blok RSA terpisah. Ini hanya demonstrasi alur; RSA textbook tanpa padding tidak aman.
 
@@ -121,17 +122,31 @@ Karena RSA contoh memakai modulus kecil, setiap byte dari kunci AES 32-byte dien
 
 CLI menggunakan modul bawaan Node.js `crypto` (`createCipheriv` dan `createDecipheriv`). GUI menggunakan Web Crypto API bawaan browser untuk AES-GCM. RSA tetap memakai implementasi `modPow` proyek.
 
-## Membandingkan RSA, AES-GCM, dan hybrid
+## Menjelaskan dekripsi RSA dengan CRT
 
-Perintah `node src/cli.js compare 61 53 17 "Halo Matdis"` dan halaman Perbandingan di GUI memproses pesan yang sama dengan tiga mode. Output menunjukkan apakah round-trip mengembalikan teks yang sama, waktu enkripsi/dekripsi satu kali, dan ukuran serialisasi payload JSON contoh.
+Dengan private exponent d dan faktor p, q, hitung:
 
-Perbandingan konsep yang dapat disampaikan:
+- `dp = d mod (p - 1)`
+- `dq = d mod (q - 1)`
+- `m1 = c^dp mod p`
+- `m2 = c^dq mod q`
+- `h = q⁻¹(m1 - m2) mod p`
+- `m = m2 + hq`
 
-- RSA mandiri memakai pasangan public/private key dan pada proyek ini mengubah setiap byte menjadi satu blok cipher. Payload angka RSA menjadi panjang dan operasi modular dilakukan untuk setiap byte.
-- AES-GCM mandiri cepat untuk isi pesan dan menyediakan authentication tag, tetapi penerima harus sudah memiliki kunci simetris yang sama.
-- Hybrid menggunakan AES-GCM untuk data dan membungkus kunci sesi dengan RSA. Dalam proyek ini setiap byte kunci dibungkus RSA hanya karena modulus pendidikan terlalu kecil untuk menampung kunci utuh.
+Operasi enkripsi tetap `c = m^e mod n`. CRT adalah cara alternatif untuk menghitung operasi private-key `m = c^d mod n`; ia tidak mengubah ciphertext dan bukan algoritma enkripsi terpisah. Halaman latihan RSA-CRT memakai ciphertext yang sama untuk memperlihatkan kedua cara dekripsi.
 
-Waktu yang dicetak bukan kesimpulan performa umum. Pesan pendek, satu kali pengukuran, overhead browser/runtime, dan ukuran RSA kecil membuat angka sangat bergantung pada perangkat serta implementasi. Ukuran payload juga menghitung serialisasi JSON demonstrasi, bukan ukuran protokol jaringan nyata.
+## Membandingkan RSA, CRT, AES-GCM, dan hybrid
+
+Perintah `node src/cli.js compare 100 100 999 128` dan halaman Perbandingan di GUI menjalankan banyak sampel acak untuk dua skema:
+
+1. RSA biasa per byte untuk seluruh pesan.
+2. Hybrid RSA + AES-GCM, dengan RSA-CRT untuk membuka kunci sesi AES.
+
+Setiap sampel membuat p dan q prima secara acak, membentuk modulus n yang unik, lalu menghasilkan pesan acak dengan panjang yang dipilih. Pasangan kunci yang sama dan isi pesan yang sama dipakai untuk membandingkan dua skema. Key generation diukur terpisah karena biayanya sama-sama dibutuhkan kedua skema.
+
+Data setiap sampel mencakup p, q, n, panjang pesan, waktu pembuatan kunci, waktu enkripsi dan dekripsi masing-masing metode, ukuran payload JSON, serta status round-trip. GUI menampilkan rata-rata, median, minimum, maksimum, grafik batang untuk waktu enkripsi/dekripsi dan ukuran payload, tabel seluruh sampel, dan ekspor CSV. CLI mencetak pengaturan, ringkasan statistik, dan baris sampel dalam JSON.
+
+Waktu yang dicetak bukan kesimpulan performa umum. Dengan nilai kecil, overhead CRT dapat membuatnya tampak lebih lambat daripada RSA biasa. Pengukuran satu kali per sampel, overhead browser/runtime, dan ukuran RSA yang dibatasi membuat angka bergantung pada perangkat serta implementasi. Ukuran payload menghitung serialisasi JSON demonstrasi, bukan protokol jaringan nyata.
 
 Demonstrasi ini **tidak aman untuk pemakaian nyata**: RSA menggunakan bilangan prima kecil, enkripsi RSA textbook tanpa padding, dan pembungkusan per byte. Sistem produksi harus menggunakan library kriptografi yang diaudit, RSA-OAEP atau mekanisme pertukaran kunci modern, serta ukuran kunci yang sesuai.
 

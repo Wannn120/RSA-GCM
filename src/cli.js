@@ -1,29 +1,30 @@
 'use strict';
 
 const readline = require('readline');
-const { generateKeyPairFromPrimes, encryptBlocks, decryptBlocks } = require('./rsa');
+const {
+  generateKeyPairFromPrimes,
+  encryptBlocks,
+  decryptBlocks,
+  decryptBlocksCrt
+} = require('./rsa');
 const { encodeText, decodeText, explainEncoding } = require('./message-codec');
 const { traceKeyGeneration } = require('./rsa-trace');
 const { trialDivisionTrace } = require('./primality');
 const { gcdTrace, extendedGcd, modPowTrace } = require('./math');
 const { stringify, table } = require('./format');
-const { hybridEncrypt, hybridDecrypt } = require('./hybrid');
+const { hybridEncrypt, hybridDecrypt, hybridDecryptCrt } = require('./hybrid');
 const { generateAesKey, encryptAesGcm, decryptAesGcm } = require('./aes-gcm');
+const { runComparisonBatch, LIMITS: comparisonLimits } = require('./comparison');
 const { checksum, tamperBlock } = require('./tamper');
 const { ServerSimulator } = require('./server-simulator');
 
 function printTitle(text) {
+  // Judul memisahkan tahap demo agar output terminal mudah dipindai.
   console.log(`\n${text}`);
 }
 
-// Waktu ini menunjukkan satu eksekusi demonstrasi, bukan benchmark statistik.
-function measureMilliseconds(action) {
-  const start = process.hrtime.bigint();
-  const result = action();
-  return { result, elapsedMs: Number(process.hrtime.bigint() - start) / 1e6 };
-}
-
 function printKeyTrace(trace) {
+  // Tampilkan penjelasan dan jejak hitung yang disiapkan rsa-trace.js.
   printTitle('Proses pembentukan kunci RSA');
   for (const line of trace.explanation) console.log(`• ${line}`);
 
@@ -46,6 +47,7 @@ function printKeyTrace(trace) {
 }
 
 function runDemo() {
+  // Contoh angka tetap dipilih kecil agar setiap operasi bisa dihitung saat presentasi.
   const p = 61n;
   const q = 53n;
   const e = 17n;
@@ -87,6 +89,7 @@ function runDemo() {
 }
 
 function showHelp() {
+  // Daftar bentuk perintah menjadi panduan langsung dari CLI.
   console.log(`
 MATDIS RSA LAB CLI
 
@@ -99,9 +102,11 @@ Pemakaian:
   node src/cli.js modpow <base> <exp> <mod>
   node src/cli.js key <p> <q> [e]
   node src/cli.js encrypt <p> <q> <e> <pesan>
+  node src/cli.js encrypt-crt <p> <q> <e> <pesan>
   node src/cli.js aes <pesan>
   node src/cli.js hybrid <p> <q> <e> <pesan>
-  node src/cli.js compare <p> <q> <e> <pesan>
+  node src/cli.js hybrid-crt <p> <q> <e> <pesan>
+  node src/cli.js compare [jumlah] [prima-min] [prima-max] [ukuran-pesan-byte]
   node src/cli.js tamper <pesan> <indexByte> <delta>
   node src/cli.js send <p> <q> <e> <pesan>
 
@@ -111,6 +116,7 @@ GUI terpisah ada di folder gui dan dapat dibuka lewat gui/index.html.
 }
 
 function runCommand(args) {
+  // Perintah pertama memilih operasi; sisanya diinterpretasi sesuai operasi itu.
   const [command, ...rest] = args;
   if (!command) return false;
 
@@ -162,6 +168,31 @@ function runCommand(args) {
       console.log(`Dekripsi: ${decodeText(decryptBlocks(cipher, pair.privateKey))}`);
       return true;
     }
+    // CRT mengubah cara dekripsi RSA; proses enkripsinya tetap memakai public key yang sama.
+    case 'encrypt-crt': {
+      const [p, q, e, ...messageParts] = rest;
+      const message = messageParts.join(' ');
+      const pair = generateKeyPairFromPrimes(BigInt(p), BigInt(q), BigInt(e));
+      if (pair.publicKey.n <= 255n) throw new Error('n harus lebih besar dari 255 untuk mode teks per byte.');
+      const blocks = encodeText(message);
+      const cipher = encryptBlocks(blocks, pair.publicKey);
+      const restored = decryptBlocksCrt(cipher, pair.privateKey, pair.details.p, pair.details.q);
+      console.log(stringify({
+        metode: 'RSA dengan dekripsi CRT',
+        pesan: message,
+        blokPesan: blocks,
+        cipher,
+        blokHasilDekripsi: restored,
+        hasilDekripsi: decodeText(restored),
+        rumus: {
+          dp: 'd mod (p - 1)',
+          dq: 'd mod (q - 1)',
+          h: 'q⁻¹ × (m1 - m2) mod p',
+          m: 'm2 + h × q'
+        }
+      }));
+      return true;
+    }
     // Mode mandiri ini menunjukkan AES-GCM ketika kunci sesi sudah tersedia bersama.
     case 'aes': {
       const message = rest.join(' ');
@@ -190,53 +221,36 @@ function runCommand(args) {
       }));
       return true;
     }
-    // Ketiga metode memakai teks yang sama agar hasil dan ukuran payload dapat dibandingkan.
-    case 'compare': {
+    // Varian ini menggunakan CRT hanya saat penerima membuka blok kunci AES dengan RSA.
+    case 'hybrid-crt': {
       const [p, q, e, ...parts] = rest;
-      const message = parts.join(' ');
       const pair = generateKeyPairFromPrimes(BigInt(p), BigInt(q), BigInt(e));
-      if (pair.publicKey.n <= 255n) {
-        throw new Error('n harus lebih besar dari 255 untuk enkripsi RSA per byte.');
-      }
-
-      const rsaPlain = encodeText(message);
-      const rsaEncrypted = measureMilliseconds(() => encryptBlocks(rsaPlain, pair.publicKey));
-      const rsaDecrypted = measureMilliseconds(() => decryptBlocks(rsaEncrypted.result, pair.privateKey));
-      const aesKey = generateAesKey();
-      const aesEncrypted = measureMilliseconds(() => encryptAesGcm(message, aesKey));
-      const aesDecrypted = measureMilliseconds(() => decryptAesGcm(aesEncrypted.result, aesKey));
-      const hybridEncrypted = measureMilliseconds(() => hybridEncrypt(message, pair.publicKey));
-      const hybridDecrypted = measureMilliseconds(() => hybridDecrypt(hybridEncrypted.result, pair.privateKey));
-      const entries = [
-        {
-          metode: 'RSA textbook per byte',
-          enkripsiMs: rsaEncrypted.elapsedMs,
-          dekripsiMs: rsaDecrypted.elapsedMs,
-          ukuranPayloadByte: Buffer.byteLength(stringify(rsaEncrypted.result)),
-          hasil: decodeText(rsaDecrypted.result)
-        },
-        {
-          metode: 'AES-256-GCM mandiri',
-          enkripsiMs: aesEncrypted.elapsedMs,
-          dekripsiMs: aesDecrypted.elapsedMs,
-          ukuranPayloadByte: Buffer.byteLength(stringify(aesEncrypted.result)),
-          hasil: aesDecrypted.result
-        },
-        {
-          metode: 'Hybrid RSA + AES-256-GCM',
-          enkripsiMs: hybridEncrypted.elapsedMs,
-          dekripsiMs: hybridDecrypted.elapsedMs,
-          ukuranPayloadByte: Buffer.byteLength(stringify(hybridEncrypted.result)),
-          hasil: hybridDecrypted.result.text
-        }
-      ];
-
+      const payload = hybridEncrypt(parts.join(' '), pair.publicKey);
+      const output = hybridDecryptCrt(payload, pair.privateKey, pair.details.p, pair.details.q);
       console.log(stringify({
-        pesan: message,
-        nRsa: pair.publicKey.n,
-        semuaHasilSama: entries.every(entry => entry.hasil === message),
-        perbandingan: entries,
-        catatan: 'Waktu satu kali eksekusi dan ukuran serialisasi contoh; bukan benchmark produksi. RSA memakai kunci kecil dan textbook per byte.'
+        pesan: parts.join(' '),
+        payload,
+        hasil: output,
+        metodeDekripsiKunci: 'RSA-CRT',
+        catatan: 'Demo pendidikan: RSA textbook membungkus tiap byte kunci AES; CRT mengoptimalkan dekripsi, bukan mengubah enkripsi.'
+      }));
+      return true;
+    }
+    // Batch menguji dua skema pada pesan dan kunci RSA acak yang sama di setiap percobaan.
+    case 'compare': {
+      // Nilai default memudahkan demo; argumen dapat memperbesar batch dan rentang prima.
+      const [runsArg, minPrimeArg, maxPrimeArg, messageBytesArg] = rest;
+      // Modul comparison menangani validasi, pembuatan data acak, pengukuran, dan ringkasan.
+      const result = runComparisonBatch({
+        runs: runsArg === undefined ? 100 : Number(runsArg),
+        minPrime: minPrimeArg === undefined ? 100 : Number(minPrimeArg),
+        maxPrime: maxPrimeArg === undefined ? 999 : Number(maxPrimeArg),
+        messageBytes: messageBytesArg === undefined ? 128 : Number(messageBytesArg)
+      });
+      console.log(stringify({
+        ...result,
+        limits: comparisonLimits,
+        catatan: 'Hasil acak untuk pengamatan pendidikan. Ukuran prima sengaja kecil; waktu dipengaruhi perangkat dan tidak mewakili performa kriptografi produksi.'
       }));
       return true;
     }
