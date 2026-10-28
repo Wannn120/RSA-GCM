@@ -15,6 +15,7 @@ function tamperBlock(blocks, index, delta = 1n) {
   return copy;
 }
 
+// Uji batas untuk memastikan perbandingan blok bekerja dengan benar.
 function compareBlocks(original, changed) {
   const max = Math.max(original.length, changed.length);
   const differences = [];

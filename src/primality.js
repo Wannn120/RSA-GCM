@@ -5,11 +5,11 @@ const { modPow, toBigInt } = require('./math');
 function isPrimeTrial(n) {
   // Trial division menentukan prima dengan mencoba semua pembagi ganjil sampai √n.
   n = toBigInt(n);
-  if (n < 2n) return false;
-  if (n === 2n || n === 3n) return true;
-  if (n % 2n === 0n) return false;
+  if (n < 2n) return false; // Bilangan kurang dari 2 bukan prima.
+  if (n === 2n || n === 3n) return true; // 2 dan 3 adalah bilangan prima.
+  if (n % 2n === 0n) return false; // Bilangan genap selain 2 bukan prima.
 
-  for (let i = 3n; i * i <= n; i += 2n) {
+  for (let i = 3n; i * i <= n; i += 2n) { // Cukup uji pembagi ganjil sampai akar kuadrat n.
     if (n % i === 0n) return false;
   }
   return true;
@@ -23,7 +23,7 @@ function trialDivisionTrace(n) {
   if (n === 2n) return { prime: true, reason: '2 adalah bilangan prima terkecil.', tested };
   if (n % 2n === 0n) return { prime: false, reason: 'Habis dibagi 2.', tested: [2n] };
 
-  for (let i = 3n; i * i <= n; i += 2n) {
+  for (let i = 3n; i * i <= n; i += 2n) { // Cukup uji pembagi ganjil sampai akar kuadrat n.
     const remainder = n % i;
     tested.push({ divisor: i, remainder });
     if (remainder === 0n) {
@@ -72,4 +72,4 @@ function millerRabin(n, bases = [2n, 3n, 5n, 7n, 11n]) {
   return true;
 }
 
-module.exports = { isPrimeTrial, trialDivisionTrace, millerRabin };
+module.exports = { isPrimeTrial, trialDivisionTrace, millerRabin }; 

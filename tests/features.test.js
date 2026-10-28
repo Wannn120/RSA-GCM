@@ -39,6 +39,7 @@ test('AES-GCM mandiri menolak ciphertext atau authentication tag yang diubah', (
   assert.throws(() => decryptAesGcm(changedTag, key));
 });
 
+// Uji batas untuk memastikan hybrid RSA + AES-GCM dapat mengenkripsi dan memulihkan pesan UTF-8.
 test('hybrid RSA + AES-GCM mengembalikan pesan UTF-8', () => {
   const payload = hybridEncrypt('Halo 🎓', pair.publicKey);
   const restored = hybridDecrypt(payload, pair.privateKey);
@@ -49,12 +50,14 @@ test('hybrid RSA + AES-GCM mengembalikan pesan UTF-8', () => {
   assert.equal(Buffer.from(payload.authTag, 'hex').length, 16);
 });
 
+// Uji batas untuk memastikan hybrid RSA + AES-GCM menolak ciphertext atau tag yang diubah.
 test('hybrid dengan RSA-CRT memulihkan kunci AES dan pesan UTF-8', () => {
   const payload = hybridEncrypt('Hybrid CRT 😊', pair.publicKey);
   const restored = hybridDecryptCrt(payload, pair.privateKey, pair.details.p, pair.details.q);
   assert.equal(restored.text, 'Hybrid CRT 😊');
 });
 
+// Uji batas untuk memastikan perubahan ciphertext atau tag ditolak.
 test('AES-GCM menolak ciphertext atau authentication tag yang telah diubah', () => {
   const payload = hybridEncrypt('Pesan yang harus autentik', pair.publicKey);
   const firstByte = Number.parseInt(payload.ciphertext.slice(0, 2), 16);
@@ -67,6 +70,7 @@ test('AES-GCM menolak ciphertext atau authentication tag yang telah diubah', () 
   assert.throws(() => hybridDecrypt(changedTag, pair.privateKey));
 });
 
+// Uji batas untuk modulus RSA yang terlalu kecil agar tidak dapat membungkus kunci AES.
 test('hybrid menolak modulus RSA yang tidak dapat membungkus byte', () => {
   const smallPair = generateKeyPairFromPrimes(3n, 5n, 3n);
   assert.throws(() => hybridEncrypt('Halo', smallPair.publicKey), /lebih besar dari 255/);
@@ -84,6 +88,7 @@ test('batch perbandingan memakai n acak unik dan round-trip dua skema', () => {
   assert.ok(result.summary.hybridDecryptCrtMs.mean >= 0);
 });
 
+// Uji batas untuk jumlah percobaan agar tidak terlalu besar.
 test('batch perbandingan menolak ukuran percobaan di luar batas', () => {
   const { runComparisonBatch } = require('../src/comparison');
   assert.throws(() => runComparisonBatch({ runs: 1001 }), /Jumlah percobaan/);
@@ -101,6 +106,7 @@ test('perintah CLI compare mengembalikan data batch untuk dua skema', () => {
   assert.equal(new Set(result.rows.map(row => row.n)).size, 5);
 });
 
+// Uji checksum untuk memastikan perubahan byte memengaruhi hasil.
 test('perubahan byte membuat checksum demo berbeda untuk contoh', () => {
   const original = encodeText('MATDIS');
   const changed = tamperBlock(original, 0, 1n);
@@ -108,6 +114,7 @@ test('perubahan byte membuat checksum demo berbeda untuk contoh', () => {
   assert.deepEqual(original, encodeText('MATDIS'));
 });
 
+// Simulasi server untuk menguji pengiriman pesan antara dua pihak.
 test('Alice mengirim pesan UTF-8 kepada Bob', () => {
   const alice = new ServerSimulator('Alice', pair);
   const bob = new ServerSimulator('Bob', pair);

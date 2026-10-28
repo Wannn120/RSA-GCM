@@ -10,6 +10,7 @@ const {
 } = require('../src/rsa');
 const { encodeText, decodeText } = require('../src/message-codec');
 
+// Uji batas untuk memastikan key generation RSA menghasilkan nilai yang diharapkan.
 test('key generation contoh RSA menghasilkan nilai yang diharapkan', () => {
   const pair = generateKeyPairFromPrimes(61n, 53n, 17n);
   assert.equal(pair.details.n, 3233n);
@@ -17,6 +18,7 @@ test('key generation contoh RSA menghasilkan nilai yang diharapkan', () => {
   assert.equal(pair.details.d, 2753n);
 });
 
+// Uji batas untuk memastikan enkripsi dan dekripsi RSA menghasilkan plaintext yang sama.
 test('teks kembali sama setelah enkripsi dan dekripsi', () => {
   const pair = generateKeyPairFromPrimes(61n, 53n, 17n);
   const message = 'MATDIS';
@@ -25,6 +27,7 @@ test('teks kembali sama setelah enkripsi dan dekripsi', () => {
   assert.equal(restored, message);
 });
 
+// Uji batas untuk memastikan dekripsi RSA-CRT menghasilkan plaintext yang sama dengan dekripsi RSA biasa.
 test('dekripsi RSA-CRT menghasilkan plaintext yang sama dengan dekripsi RSA biasa', () => {
   const pair = generateKeyPairFromPrimes(61n, 53n, 17n);
   const message = 'Uji CRT 🎓';
@@ -35,12 +38,14 @@ test('dekripsi RSA-CRT menghasilkan plaintext yang sama dengan dekripsi RSA bias
   assert.equal(crt, message);
 });
 
+// Uji batas untuk memastikan dekripsi RSA-CRT menolak faktor yang tidak sesuai dengan modulus.
 test('dekripsi RSA-CRT menolak faktor yang tidak sesuai dengan modulus', () => {
   const pair = generateKeyPairFromPrimes(61n, 53n, 17n);
   const cipher = encryptBlocks([65n], pair.publicKey);
   assert.throws(() => decryptBlocksCrt(cipher, pair.privateKey, 61n, 59n), /p × q = n/);
 });
 
+// Uji batas untuk memastikan dekripsi RSA-CRT menolak faktor yang bukan prima.
 test('menolak p yang bukan prima', () => {
   assert.throws(() => generateKeyPairFromPrimes(60n, 53n, 17n));
 });
