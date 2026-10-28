@@ -59,11 +59,12 @@ function decryptNumber(cipher, privateKey) {
   const c = toBigInt(cipher, 'cipher');
   const { d, n } = privateKey;
   if (c < 0n || c >= n) throw new RangeError(`Cipher harus berada pada 0 <= c < n. Nilai c = ${c}, n = ${n}.`);
-  return modPow(c, d, n);
+  return modPow(c, d, n); // Hitung c^d mod n untuk satu blok
 }
 
 // CRT menghitung dua hasil modulo prima yang lebih kecil, lalu menyatukannya menjadi plaintext.
 function decryptNumberCrt(cipher, privateKey, p, q) {
+  // Ubah ke bentuk BigInt dan pastikan nilai berada di rentang valid
   const c = toBigInt(cipher, 'cipher');
   p = toBigInt(p, 'p');
   q = toBigInt(q, 'q');

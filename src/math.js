@@ -6,6 +6,7 @@
   Tidak ada library eksternal yang dipakai.
 */
 
+// Konversi ke BigInt dengan penanganan error
 function toBigInt(value, name = 'nilai') {
   // Konversi terpusat agar input invalid mendapatkan error yang konsisten.
   try {
@@ -34,7 +35,7 @@ function gcd(a, b) {
 }
 
 function gcdTrace(a, b) {
-  // Sama dengan gcd, tetapi setiap pembagian disimpan agar bisa dijelaskan di GUI/CLI.
+  // Sama dengan gcd, tetapi setiap pembagian disimpan
   a = abs(a);
   b = abs(b);
   const steps = [];
@@ -102,11 +103,13 @@ function modInverse(a, m) {
   return mod(result.x, m);
 }
 
+// Menghitung base^exponent (mod modulus)
 function modPow(base, exponent, modulus) {
-  // Validasi memastikan square-and-multiply tidak menerima operasi yang tak terdefinisi.
+  // Ubah base, exponent, modulus ke BigInt
   base = toBigInt(base);
   exponent = toBigInt(exponent);
   modulus = toBigInt(modulus);
+  // Pastikan modulus dan exponent valid
   if (modulus <= 0n) throw new RangeError('Modulus harus positif.');
   if (exponent < 0n) throw new RangeError('Eksponen tidak boleh negatif.');
 
@@ -114,6 +117,7 @@ function modPow(base, exponent, modulus) {
   let result = 1n;
   base = mod(base, modulus);
 
+  // Loop hingga exponent habis
   while (exponent > 0n) {
     if (exponent % 2n === 1n) result = (result * base) % modulus;
     exponent /= 2n;
