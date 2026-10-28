@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MATDIS RSA Lab</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <aside class="sidebar">
+      <header class="sidebar-header">
+        <div class="avatar">M</div>
+        <div class="brand-copy">
+          <strong>MATDIS RSA Lab</strong>
+          <span>GUI pembelajaran lokal</span>
+        </div>
+        <button id="themeButton" class="icon-button" type="button" aria-label="Ubah tema">◐</button>
+      </header>
+
+      <div class="search-wrap">
+        <input id="searchModule" type="search" placeholder="Cari modul">
+      </div>
+
+      <nav id="moduleList" class="module-list" aria-label="Daftar modul">
+        <button class="module-item active" data-page="dashboard" type="button">
+          <span class="module-icon">⌂</span>
+          <span><strong>Ringkasan RSA</strong><small>Alur lengkap dari p, q sampai pesan</small></span>
+        </button>
+        <button class="module-item" data-page="keygen" type="button">
+          <span class="module-icon">K</span>
+          <span><strong>Pembentukan Kunci</strong><small>n, φ(n), gcd, e, d</small></span>
+        </button>
+        <button class="module-item" data-page="message" type="button">
+          <span class="module-icon">M</span>
+          <span><strong>Pesan RSA</strong><small>UTF-8, enkripsi, dekripsi</small></span>
+        </button>
+        <button class="module-item" data-page="prime" type="button">
+          <span class="module-icon">P</span>
+          <span><strong>Uji Prima</strong><small>Trial division bertahap</small></span>
+        </button>
+        <button class="module-item" data-page="modpow" type="button">
+          <span class="module-icon">^</span>
+          <span><strong>Modular Power</strong><small>Square-and-multiply</small></span>
+        </button>
+        <button class="module-item" data-page="hybrid" type="button"><span class="module-icon">X</span><span><strong>Hybrid RSA + XOR</strong><small>Enkripsi kunci dan byte</small></span></button>
+        <button class="module-item" data-page="tamper" type="button"><span class="module-icon">Δ</span><span><strong>Perubahan Data</strong><small>Checksum dan perbandingan</small></span></button>
+        <button class="module-item" data-page="send" type="button"><span class="module-icon">↗</span><span><strong>Pengiriman Pesan</strong><small>Alur Alice dan Bob</small></span></button>
+        <button class="module-item" data-page="about" type="button">
+          <span class="module-icon">i</span>
+          <span><strong>Catatan Presentasi</strong><small>Penjelasan konsep dan batasan</small></span>
+        </button>
+      </nav>
+    </aside>
+
+    <section class="workspace">
+      <header class="chat-header">
+        <div class="avatar small">R</div>
+        <div>
+          <strong id="pageTitle">Ringkasan RSA</strong>
+          <span id="pageSubtitle">Semua data perhitungan ditampilkan</span>
+        </div>
+        <div class="header-actions">
+          <span class="status-dot"></span>
+          <span>Lokal, tanpa server</span>
+        </div>
+      </header>
+
+      <div id="content" class="content"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
