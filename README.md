@@ -161,7 +161,7 @@ node src/cli.js tamper MATDIS 0 1
 node src/cli.js send 61 53 17 "Halo Bob"
 ```
 
-GUI menyediakan modul RSA, AES-GCM mandiri, dekripsi RSA-CRT, perbandingan dua skema melalui eksperimen acak, dan hybrid lewat menu di sidebar. Struktur disusun sesuai fungsinya dan bukan salinan screenshot referensi.
+GUI memisahkan tiga percobaan utama ke halaman masing-masing: RSA manual, AES-GCM + RSA-CRT manual, dan eksperimen acak. Dua simulasi manual bergaya percakapan Alice–Bob menunjukkan waktu, hasil dekripsi, serta data dan rumus lengkap yang dapat dibuka; eksperimen acak menampilkan grafik, ringkasan statistik, data sampel, dan ekspor CSV. Modul pendukung seperti pembentukan kunci, uji prima, pangkat modular, AES-GCM mandiri, dan pemeriksaan integritas dikelompokkan di bagian pengamatan tambahan. Gaya utama mengikuti nuansa WhatsApp beraksen hijau, sedangkan ikon modul pengamatan tambahan memakai aksen kuning.
 
 Hybrid ini khusus demonstrasi pendidikan: kunci AES 256-bit dibungkus RSA per byte agar dapat digunakan dengan modulus kecil contoh proyek. RSA textbook tanpa padding dan modulus kecil tidak aman untuk data nyata. Untuk aplikasi produksi, gunakan implementasi kriptografi teruji dengan RSA-OAEP (atau mekanisme pertukaran kunci modern) dan AES-GCM.
 

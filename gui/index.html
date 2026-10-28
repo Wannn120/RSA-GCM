@@ -25,8 +25,22 @@
       <nav id="moduleList" class="module-list" aria-label="Daftar modul">
         <button class="module-item active" data-page="dashboard" type="button">
           <span class="module-icon">⌂</span>
-          <span><strong>Ringkasan RSA</strong><small>Alur lengkap dari p, q sampai pesan</small></span>
+          <span><strong>Beranda Lab</strong><small>Pilih percobaan yang ingin diamati</small></span>
         </button>
+        <div class="module-group-label">Percobaan utama</div>
+        <button class="module-item" data-page="manualRsa" type="button">
+          <span class="module-icon">R</span>
+          <span><strong>RSA Manual</strong><small>Enkripsi dan dekripsi pesan</small></span>
+        </button>
+        <button class="module-item" data-page="manualHybrid" type="button">
+          <span class="module-icon">H</span>
+          <span><strong>AES-GCM + RSA-CRT</strong><small>Hybrid enkripsi dan dekripsi</small></span>
+        </button>
+        <button class="module-item" data-page="compare" type="button">
+          <span class="module-icon">↔</span>
+          <span><strong>Eksperimen Acak</strong><small>RSA biasa vs RSA + AES-GCM + CRT</small></span>
+        </button>
+        <div class="module-group-label additional-group-label">Modul pengamatan tambahan</div>
         <button class="module-item" data-page="keygen" type="button">
           <span class="module-icon">K</span>
           <span><strong>Pembentukan Kunci</strong><small>n, φ(n), gcd, e, d</small></span>
@@ -42,10 +56,6 @@
         <button class="module-item" data-page="crt" type="button">
           <span class="module-icon">C</span>
           <span><strong>Dekripsi RSA-CRT</strong><small>Perbandingan dekripsi RSA biasa dan CRT</small></span>
-        </button>
-        <button class="module-item" data-page="compare" type="button">
-          <span class="module-icon">↔</span>
-          <span><strong>Eksperimen Acak</strong><small>RSA biasa vs RSA + AES + CRT</small></span>
         </button>
         <button class="module-item" data-page="prime" type="button">
           <span class="module-icon">P</span>

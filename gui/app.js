@@ -222,41 +222,137 @@ function keyForm(prefix = '') {
 }
 
 function renderDashboard() {
-  content.innerHTML = `<div class="chat-stack">
-    <div class="bubble"><strong>Apa yang dilakukan aplikasi ini?</strong><p>GUI mempelajari RSA, AES-GCM mandiri, dan hybrid RSA + AES-GCM. Modul RSA menunjukkan hitungan dengan BigInt; AES-GCM menggunakan Web Crypto API bawaan browser.</p></div>
-    <div class="bubble out"><strong>Contoh default</strong><p>p = 61, q = 53, e = 17. Contoh ini menghasilkan n = 3233, φ(n) = 3120, dan d = 2753.</p></div>
-    <section class="panel">
-      <div class="panel-title">Jalankan alur lengkap</div>
-      <div class="panel-body">
-        ${keyForm('dash')}
-        <div class="field" style="margin-top:12px"><label>Pesan</label><textarea id="dashMessage">MATDIS</textarea></div>
-        <div class="actions"><button id="runDashboard" class="action-button" type="button">Hitung Semua</button></div>
-        <div id="dashboardResult"></div>
+  content.innerHTML = `<div class="lab-layout">
+    <header class="lab-intro">
+      <div><span class="eyebrow">LAB KRIPTOGRAFI • MATDIS</span><h1>Bandingkan dua cara mengirim pesan</h1></div>
+      <p>Pilih salah satu dari tiga percobaan utama. Setiap percobaan memiliki halaman dan hasilnya sendiri dengan tampilan percakapan WhatsApp.</p>
+    </header>
+    <div class="primary-links">
+      <button class="primary-link" type="button" data-main-page="manualRsa"><span class="primary-link-icon">01</span><span><strong>RSA Manual</strong><small>Enkripsi dan dekripsi pesan langsung per byte</small></span><b>→</b></button>
+      <button class="primary-link" type="button" data-main-page="manualHybrid"><span class="primary-link-icon">02</span><span><strong>AES-GCM + RSA-CRT</strong><small>Enkripsi hybrid dan buka kunci sesi dengan CRT</small></span><b>→</b></button>
+      <button class="primary-link" type="button" data-main-page="compare"><span class="primary-link-icon">03</span><span><strong>Eksperimen Acak</strong><small>Grafik dan data perbandingan kedua skema</small></span><b>→</b></button>
+    </div>
+    <div class="support-panel">
+      <div class="support-heading"><span class="support-icon">✳</span><div><h2>Modul pengamatan tambahan</h2><p>Rincian konsep, metode bantu, dan pemeriksaan data.</p></div></div>
+      <div class="support-links">
+        ${supportLink('keygen', 'Kunci RSA', 'Lihat n, φ(n), gcd, dan Extended Euclid')}
+        ${supportLink('crt', 'Langkah CRT', 'Periksa residu m₁, m₂, dan penggabungan')}
+        ${supportLink('prime', 'Uji bilangan prima', 'Telusuri pembagi sampai √n')}
+        ${supportLink('modpow', 'Pangkat modular', 'Pelajari square-and-multiply')}
+        ${supportLink('aes', 'AES-GCM mandiri', 'Uji authentication tag tanpa RSA')}
+        ${supportLink('hybrid', 'Hybrid tanpa CRT', 'Bandingkan pembukaan kunci RSA biasa')}
+        ${supportLink('send', 'Simulasi Alice–Bob', 'Lihat alur pesan lokal')}
+        ${supportLink('tamper', 'Integritas data', 'Amati dampak perubahan byte')}
+        ${supportLink('about', 'Catatan presentasi', 'Rumus, konteks, dan batasan demo')}
       </div>
-    </section>
+    </div>
   </div>`;
 
-  $('#runDashboard').addEventListener('click', () => {
-    const target = $('#dashboardResult');
-    try {
-      const key = makeKey(big($('#dashp').value, 'p'), big($('#dashq').value, 'q'), big($('#dashe').value, 'e'));
-      if (key.n <= 255n) throw new Error('Untuk pesan UTF-8 per byte, gunakan n > 255.');
-      state.key = key;
-      const text = $('#dashMessage').value;
-      const plain = encodeText(text);
-      const cipher = encryptBlocks(plain, key);
-      const restored = decryptBlocks(cipher, key);
-      state.lastMessage = { text, plain, cipher, restored };
+  content.querySelectorAll('[data-main-page]').forEach(link => {
+    link.addEventListener('click', () => go(link.dataset.mainPage));
+  });
+  content.querySelectorAll('[data-support-page]').forEach(link => {
+    link.addEventListener('click', () => go(link.dataset.supportPage));
+  });
+}
 
-      const blockRows = plain.map((m, i) => [i, m, `${m}^${key.e} mod ${key.n}`, cipher[i], `${cipher[i]}^${key.d} mod ${key.n}`, restored[i]]);
-      target.innerHTML = `${keyMetrics(key)}
-        <div class="notice">Syarat utama: p dan q prima, e relatif prima dengan φ(n), lalu d adalah invers e modulo φ(n).</div>
-        ${table(['i', 'm', 'Rumus enkripsi', 'c', 'Rumus dekripsi', 'm kembali'], blockRows)}
-        <div class="code">Pesan awal    : ${html(text)}\nByte UTF-8     : ${plain.join(', ')}\nCipher         : ${cipher.join(', ')}\nByte kembali   : ${restored.join(', ')}\nTeks kembali   : ${html(decodeText(restored))}</div>`;
+function renderManualRsa() {
+  content.innerHTML = `<div class="lab-layout">
+    <header class="lab-intro"><div><span class="eyebrow">PERCOBAAN UTAMA 01</span><h1>Enkripsi RSA biasa</h1></div><p>Pesan diubah menjadi byte, dienkripsi per blok dengan public key, lalu Bob memulihkannya menggunakan private key.</p></header>
+    <article class="panel experiment-card">
+      <div class="panel-title"><span class="method-mark rsa-mark">RSA</span><span><strong>Simulasi percakapan Alice dan Bob</strong><small>Textbook RSA per byte untuk pembelajaran</small></span></div>
+      <div class="panel-body">
+        <div class="compact-key-fields">
+          <div class="field"><label for="manualRsap">Prima p</label><input id="manualRsap" value="61" inputmode="numeric"></div>
+          <div class="field"><label for="manualRsaq">Prima q</label><input id="manualRsaq" value="53" inputmode="numeric"></div>
+          <div class="field"><label for="manualRsae">Eksponen e</label><input id="manualRsae" value="17" inputmode="numeric"></div>
+        </div>
+        <div class="field message-field"><label for="manualRsaText">Pesan Alice</label><textarea id="manualRsaText">Halo Bob, ini pesan RSA.</textarea></div>
+        <div class="actions"><button class="action-button" id="runManualRsa" type="button">Enkripsi dan kirim</button></div>
+        <div class="chat-transcript" id="manualRsaResult" aria-live="polite"><div class="bubble"><strong>Bob</strong><p>Hasil enkripsi dan dekripsi akan muncul di sini.</p></div></div>
+      </div>
+    </article>
+  </div>`;
+
+  $('#runManualRsa').addEventListener('click', () => {
+    const target = $('#manualRsaResult');
+    try {
+      const key = makeKey(big($('#manualRsap').value, 'p'), big($('#manualRsaq').value, 'q'), big($('#manualRsae').value, 'e'));
+      if (key.n <= 255n) throw new Error('Untuk memproses seluruh byte UTF-8, gunakan n > 255.');
+      const text = $('#manualRsaText').value;
+      const plain = encodeText(text);
+      const encryptStartedAt = performance.now();
+      const cipher = encryptBlocks(plain, key);
+      const encryptMs = performance.now() - encryptStartedAt;
+      const decryptStartedAt = performance.now();
+      const restored = decryptBlocks(cipher, key);
+      const decryptMs = performance.now() - decryptStartedAt;
+      const received = decodeText(restored);
+      const detail = `RSA per byte\np=${key.p}, q=${key.q}, n=${key.n}, phi(n)=${key.phi}\nPublic key : (e=${key.e}, n=${key.n})\nPrivate key: (d=${key.d}, n=${key.n})\nPesan UTF-8: ${plain.join(', ')}\nCipher     : ${cipher.join(', ')}\nRumus      : c = m^e mod n; m = c^d mod n\nByte pulih : ${restored.join(', ')}\nWaktu enkripsi: ${encryptMs.toFixed(4)} ms\nWaktu dekripsi: ${decryptMs.toFixed(4)} ms`;
+      target.innerHTML = `<div class="bubble out"><strong>Alice • pesan terkirim</strong><p>${html(text)}</p><small>${plain.length} byte pesan</small></div>
+        <div class="bubble"><strong>Bob • menerima ciphertext</strong><p class="transcript-data">${html(cipher.join(', '))}</p><small>Didekripsi dengan private exponent d</small></div>
+        <div class="bubble ${received === text ? 'received' : 'error'}"><strong>Bob • pesan terbaca</strong><p>${html(received)}</p><small>${received === text ? 'Teks cocok dengan pesan asli' : 'Hasil tidak cocok'}</small></div>
+        <div class="result-metrics"><span>Enkripsi <strong>${encryptMs.toFixed(4)} ms</strong></span><span>Dekripsi <strong>${decryptMs.toFixed(4)} ms</strong></span><span>Payload <strong>${browserPayloadSize(cipher.map(String))} byte</strong></span></div>
+        <details class="data-details"><summary>Lihat data dan rumus RSA</summary><pre class="code">${html(detail)}</pre></details>`;
     } catch (error) {
       target.innerHTML = `<div class="error">${html(error.message)}</div>`;
     }
   });
+
+}
+
+function renderManualHybrid() {
+  content.innerHTML = `<div class="lab-layout">
+    <header class="lab-intro"><div><span class="eyebrow">PERCOBAAN UTAMA 02</span><h1>AES-GCM + RSA-CRT</h1></div><p>AES-GCM mengenkripsi isi pesan. RSA membungkus kunci sesi AES, dan Bob memakai CRT untuk membuka kunci itu sebelum mendekripsi pesan.</p></header>
+    <article class="panel experiment-card">
+      <div class="panel-title"><span class="method-mark hybrid-mark">HYB</span><span><strong>Simulasi percakapan Alice dan Bob</strong><small>AES melindungi pesan, RSA-CRT membuka kunci sesi</small></span></div>
+      <div class="panel-body">
+        <div class="compact-key-fields">
+          <div class="field"><label for="manualHybridp">Prima p</label><input id="manualHybridp" value="61" inputmode="numeric"></div>
+          <div class="field"><label for="manualHybridq">Prima q</label><input id="manualHybridq" value="53" inputmode="numeric"></div>
+          <div class="field"><label for="manualHybride">Eksponen e</label><input id="manualHybride" value="17" inputmode="numeric"></div>
+        </div>
+        <div class="field message-field"><label for="manualHybridText">Pesan Alice</label><textarea id="manualHybridText">Halo Bob, pesan ini memakai AES-GCM.</textarea></div>
+        <div class="actions"><button class="action-button" id="runManualHybrid" type="button">Enkripsi dan kirim</button></div>
+        <div class="chat-transcript" id="manualHybridResult" aria-live="polite"><div class="bubble"><strong>Bob</strong><p>Hasil enkripsi dan dekripsi akan muncul di sini.</p></div></div>
+      </div>
+    </article>
+  </div>`;
+
+  $('#runManualHybrid').addEventListener('click', async event => {
+    const target = $('#manualHybridResult');
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      requireBrowserCrypto();
+      const key = makeKey(big($('#manualHybridp').value, 'p'), big($('#manualHybridq').value, 'q'), big($('#manualHybride').value, 'e'));
+      const text = $('#manualHybridText').value;
+      const encrypted = await encryptWithBrowserHybrid(text, key);
+      const restored = await decryptWithBrowserHybridCrt(encrypted, key);
+      const payload = {
+        algorithm: 'aes-256-gcm',
+        wrappedKey: encrypted.wrappedKey.map(String),
+        iv: bytesToHex(encrypted.iv),
+        ciphertext: bytesToHex(encrypted.ciphertext),
+        authTag: bytesToHex(encrypted.authTag)
+      };
+      const details = `HYBRID: AES-256-GCM + RSA-CRT\np=${key.p}, q=${key.q}, n=${key.n}, e=${key.e}, d=${key.d}\nKunci sesi: acak 256-bit, dibungkus RSA per byte (tidak ditampilkan)\nBlok kunci terenkripsi: ${encrypted.wrappedKey.join(', ')}\nIV: ${bytesToHex(encrypted.iv)}\nCiphertext: ${bytesToHex(encrypted.ciphertext)}\nAuthentication tag: ${bytesToHex(encrypted.authTag)}\nCRT: dp = d mod (p-1), dq = d mod (q-1)\nDekripsi kunci: m1 = c^dp mod p; m2 = c^dq mod q\nPenggabungan: h = q^-1(m1-m2) mod p; m = m2+hq\nPesan pulih: ${restored.text}`;
+      target.innerHTML = `<div class="bubble out"><strong>Alice • pesan dienkripsi</strong><p>${html(text)}</p><small>Isi pesan dilindungi AES-256-GCM</small></div>
+        <div class="bubble"><strong>Alice → Bob • paket terkirim</strong><p class="transcript-data">Kunci AES dibungkus RSA · IV ${bytesToHex(encrypted.iv)} · tag autentikasi tersedia</p><small>Ciphertext ${bytesToHex(encrypted.ciphertext).length / 2} byte · 32 blok kunci RSA</small></div>
+        <div class="bubble received"><strong>Bob • kunci dan pesan berhasil dibuka</strong><p>${html(restored.text)}</p><small>Kunci sesi dibuka dengan CRT; tag GCM valid</small></div>
+        <div class="result-metrics"><span>Enkripsi hybrid <strong>${encrypted.elapsedMs.toFixed(4)} ms</strong></span><span>Dekripsi CRT + GCM <strong>${restored.elapsedMs.toFixed(4)} ms</strong></span><span>Payload <strong>${browserPayloadSize(payload)} byte</strong></span></div>
+        <details class="data-details"><summary>Lihat ciphertext, IV, tag, dan langkah CRT</summary><pre class="code">${html(details)}</pre></details>`;
+    } catch (error) {
+      target.innerHTML = `<div class="error">${html(error.message)}</div>`;
+    } finally {
+      button.disabled = false;
+    }
+  });
+
+}
+
+function supportLink(page, title, description) {
+  return `<button class="support-link" type="button" data-support-page="${page}"><strong>${title}</strong><span>${description}</span><b aria-hidden="true">→</b></button>`;
 }
 
 function renderKeygen() {
@@ -705,20 +801,28 @@ function renderCrt() {
   });
 }
 
-function renderComparison() {
-  content.innerHTML = `<div class="chat-stack">
-    <div class="bubble"><strong>Eksperimen RSA vs RSA + AES-GCM + CRT</strong><p>Setiap putaran membuat p dan q prima secara acak, sehingga n berubah. Kedua metode memakai pasangan kunci dan pesan acak yang sama. Pada metode hybrid, RSA membungkus kunci AES dan CRT dipakai saat membuka kunci tersebut.</p></div>
-    <section class="panel"><div class="panel-title">Atur banyak percobaan acak</div><div class="panel-body">
+function comparisonPanelMarkup() {
+  return `<section class="panel comparison-panel">
+      <div class="panel-title"><span class="method-mark experiment-mark">↔</span><span><strong>Eksperimen acak</strong><small>Bandingkan RSA biasa dengan AES-GCM + RSA-CRT</small></span></div>
+      <div class="panel-body">
       <div class="form-grid">
-        <div class="field"><label>Jumlah putaran (1 sampai 1000)</label><input id="compareRuns" type="number" min="1" max="1000" value="100"></div>
+        <div class="field"><label for="compareRuns">Jumlah percobaan (1–1000)</label><input id="compareRuns" type="number" min="1" max="1000" value="100"></div>
         <div class="field"><label>Prima minimum (17 sampai 1.000.000)</label><input id="compareMinPrime" type="number" min="17" max="1000000" value="100"></div>
         <div class="field"><label>Prima maksimum (17 sampai 1.000.000)</label><input id="compareMaxPrime" type="number" min="17" max="1000000" value="999"></div>
         <div class="field"><label>Panjang pesan acak (byte, 1 sampai 4096)</label><input id="compareMessageBytes" type="number" min="1" max="4096" value="128"></div>
       </div>
-      <div class="actions"><button class="action-button" id="runComparison">Jalankan Eksperimen</button><button class="action-button secondary" id="downloadComparison" type="button" disabled>Unduh CSV</button></div>
+      <div class="actions"><button class="action-button" id="runComparison" type="button">Jalankan eksperimen</button><button class="action-button secondary" id="downloadComparison" type="button" disabled>Unduh CSV</button></div>
       <div id="comparisonResult"></div>
-    </div></section>
-  </div>`;
+      </div>
+    </section>`;
+}
+
+function renderComparison() {
+  content.innerHTML = `<div class="lab-layout">${comparisonPanelMarkup()}</div>`;
+  bindComparison();
+}
+
+function bindComparison() {
   $('#runComparison').addEventListener('click', async () => {
     const target = $('#comparisonResult');
     const button = $('#runComparison');
@@ -907,12 +1011,14 @@ function renderSend() {
 }
 
 const pages = {
-  dashboard: ['Ringkasan RSA', 'Semua data perhitungan ditampilkan', renderDashboard],
+  dashboard: ['Beranda Lab', 'Pilih percobaan utama atau modul pengamatan tambahan', renderDashboard],
+  manualRsa: ['RSA Manual', 'Enkripsi langsung per byte dan dekripsi dengan private key', renderManualRsa],
+  manualHybrid: ['AES-GCM + RSA-CRT', 'Enkripsi pesan dengan AES-GCM dan buka kunci sesi memakai CRT', renderManualHybrid],
   keygen: ['Pembentukan Kunci', 'Euclid dan Extended Euclid terlihat langkah demi langkah', renderKeygen],
   message: ['Pesan RSA', 'Encoding UTF-8, cipher, dan hasil dekripsi', renderMessage],
   aes: ['AES-GCM Mandiri', 'Enkripsi simetris tanpa RSA', renderAesGcm],
   crt: ['Dekripsi RSA-CRT', 'Bandingkan RSA biasa dengan CRT', renderCrt],
-  compare: ['Eksperimen Acak', 'RSA biasa vs RSA + AES-GCM + CRT dengan banyak nilai n', renderComparison],
+  compare: ['Eksperimen Acak', 'Grafik dan data perbandingan RSA biasa vs AES-GCM + RSA-CRT', renderComparison],
   prime: ['Uji Prima', 'Trial division tanpa library eksternal', renderPrime],
   modpow: ['Modular Power', 'Square-and-multiply dengan tabel jejak', renderModPow],
   hybrid: ['Hybrid RSA + AES-GCM', 'RSA membungkus kunci sesi, AES-GCM mengautentikasi pesan', renderHybrid],
