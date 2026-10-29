@@ -74,6 +74,7 @@ function modInverse(a, m) {
   return positiveMod(result.x, m);
 }
 
+// Menghitung modPow dengan menyimpan langkah
 function modPowTrace(base, exponent, modulus) {
   if (modulus <= 0n) throw new Error('Modulus harus positif.');
   if (exponent < 0n) throw new Error('Eksponen tidak boleh negatif.');
@@ -94,6 +95,7 @@ function modPowTrace(base, exponent, modulus) {
   return { result, steps };
 }
 
+// Hitung base^exponent (mod modulus)
 function modPow(base, exponent, modulus) {
   return modPowTrace(base, exponent, modulus).result;
 }
