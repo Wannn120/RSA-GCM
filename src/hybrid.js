@@ -1,36 +1,40 @@
 'use strict';
 
+// Skema hybrid adalah gabungan dua prinsip keamanan: RSA untuk membungkus kunci simetris,
+// dan AES-GCM untuk mengenkripsi isi pesan. Dengan cara ini, kunci sesi tetap aman,
+// sementara content data bisa dienkripsi dalam ukuran yang lebih efisien.
 const { encryptNumber, decryptNumber, decryptNumberCrt } = require('./rsa');
 const { generateAesKey, encryptAesGcm, decryptAesGcm } = require('./aes-gcm');
 
-// Panjang kunci AES-256 dalam byte; setiap elemen nantinya satu blok RSA pendidikan.
+// Panjang kunci AES-256 dalam byte; setiap byte nanti dibungkus satu per satu oleh RSA.
 const KEY_BYTES = 32;
 
-// Hybrid menggabungkan RSA untuk kunci sesi dan AES-GCM untuk isi pesan.
+// hybridEncrypt membangun payload hybrid: AES mengenkripsi pesan, RSA membungkus kunci simetris.
 function hybridEncrypt(text, publicKey) {
-  // RSA textbook hanya dapat membungkus sebuah byte jika n lebih besar dari 255.
+  // RSA textbook hanya dapat membungkus satu byte jika modulus n lebih besar dari 255.
   if (publicKey.n <= 255n) {
     throw new RangeError('n RSA harus lebih besar dari 255 untuk membungkus byte kunci AES.');
   }
 
-  // Buat kunci AES baru untuk pesan ini, lalu enkripsi payload simetris.
+  // Buat kunci AES baru untuk pesan ini, lalu enkripsi payload menggunakan AES-GCM.
   const key = generateAesKey();
   const encrypted = encryptAesGcm(text, key);
-  // Modulus contoh terlalu kecil untuk satu kunci 256-bit, jadi enkripsi tiap byte.
+  // Karena modulus demo biasanya kecil, langkah ini membungkus tiap byte kunci AES satu per satu.
   const wrappedKey = Array.from(key, byte => encryptNumber(BigInt(byte), publicKey));
 
-  // Kirim metadata AES bersama kunci AES yang sudah dibungkus RSA.
+  // Mengembalikan payload lengkap: metadata AES + kunci yang dilindungi RSA.
   return { ...encrypted, wrappedKey };
 }
 
-// Penerima membuka byte kunci dengan RSA sebelum meminta AES-GCM memeriksa tag.
+// hybridDecrypt membuka byte kunci RSA, lalu memakai hasilnya untuk memulihkan kunci AES.
+// Setelah kunci kembali, AES-GCM akan memvalidasi tag autentikasi sebelum plaintext dikembalikan.
 function hybridDecrypt(payload, privateKey) {
-  // Pastikan payload punya semua blok byte untuk menyusun ulang kunci 32-byte.
+  // Validasi payload harus memiliki 32 blok RSA yang merepresentasikan 32 byte kunci AES.
   if (!payload || !Array.isArray(payload.wrappedKey) || payload.wrappedKey.length !== KEY_BYTES) {
     throw new TypeError(`wrappedKey harus berisi ${KEY_BYTES} blok RSA.`);
   }
 
-  // Tiap blok RSA dipulihkan ke byte; nilai di luar rentang menandakan payload/key salah.
+  // Setiap blok RSA dibuka dengan private key untuk menghasilkan byte kunci AES asli.
   const key = Buffer.from(payload.wrappedKey.map((block, index) => {
     const byte = decryptNumber(block, privateKey);
     if (byte < 0n || byte > 255n) {
@@ -39,17 +43,17 @@ function hybridDecrypt(payload, privateKey) {
     return Number(byte);
   }));
 
-  // GCM memeriksa authentication tag sebelum plaintext dapat dianggap valid.
+  // Setelah kunci dipulihkan, decryptAesGcm memeriksa tag autentikasi agar data tidak bisa diubah.
   return { text: decryptAesGcm(payload, key) };
 }
 
-// Varian ini mengubah hanya operasi RSA private-key; isi pesan tetap dibuka dengan AES-GCM.
+// hybridDecryptCrt sama seperti hybridDecrypt, hanya saja proses RSA dekripsi memakai CRT untuk efisiensi.
 function hybridDecryptCrt(payload, privateKey, p, q) {
   if (!payload || !Array.isArray(payload.wrappedKey) || payload.wrappedKey.length !== KEY_BYTES) {
     throw new TypeError(`wrappedKey harus berisi ${KEY_BYTES} blok RSA.`);
   }
 
-  // Pulihkan setiap byte kunci AES memakai dua eksponensial kecil dan rekombinasi CRT.
+  // Menggunakan CRT mempercepat pembukaan kunci RSA untuk tiap byte sebelum AES-GCM memeriksa tag.
   const key = Buffer.from(payload.wrappedKey.map((block, index) => {
     const byte = decryptNumberCrt(block, privateKey, p, q);
     if (byte < 0n || byte > 255n) {

@@ -1,5 +1,10 @@
 'use strict';
 
+// File tamper.js mencontohkan cara memeriksa integritas data.
+// Saat data diubah, checksum akan berubah. Ini mirip prinsip yang dipakai pada tag autentikasi
+// dan MAC: data yang dimodifikasi harus terdeteksi sebelum dianggap valid.
+
+// checksum menghitung nilai kontrol berdasarkan semua blok data agar perubahan kecil terdeteksi.
 function checksum(blocks, modulus = 1000003n) {
   let total = 0n;
   for (let i = 0; i < blocks.length; i++) {
@@ -8,6 +13,7 @@ function checksum(blocks, modulus = 1000003n) {
   return total;
 }
 
+// tamperBlock membuat salinan data lalu mengubah satu blok tertentu dengan delta tertentu.
 function tamperBlock(blocks, index, delta = 1n) {
   if (index < 0 || index >= blocks.length) throw new RangeError('Index blok di luar rentang.');
   const copy = blocks.map(BigInt);
@@ -15,7 +21,7 @@ function tamperBlock(blocks, index, delta = 1n) {
   return copy;
 }
 
-// Uji batas untuk memastikan perbandingan blok bekerja dengan benar.
+// compareBlocks membandingkan dua rangkaian blok dan melaporkan perbedaan index per index.
 function compareBlocks(original, changed) {
   const max = Math.max(original.length, changed.length);
   const differences = [];

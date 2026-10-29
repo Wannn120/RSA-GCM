@@ -1,5 +1,7 @@
 'use strict';
 
+// File ini menangani operasi AES-256-GCM, yaitu enkripsi simetris yang juga melakukan autentikasi.
+// AES-GCM sering dipakai bersama RSA untuk skema hybrid: RSA membungkus kunci, AES mengenkripsi pesan.
 const crypto = require('crypto');
 
 const ALGORITHM = 'aes-256-gcm';
@@ -7,14 +9,15 @@ const KEY_BYTES = 32;
 const IV_BYTES = 12;
 const AUTH_TAG_BYTES = 16;
 
-// Ukuran kunci tetap menentukan AES-256, sedangkan isinya harus acak dari CSPRNG Node.js.
+// generateAesKey membuat kunci acak 32 byte agar sesuai dengan AES-256.
 function generateAesKey() {
   return crypto.randomBytes(KEY_BYTES);
 }
 
-// IV dibuat baru untuk setiap pesan dan disimpan bersama ciphertext; IV bukan rahasia.
+// encryptAesGcm mengenkripsi teks dan mengembalikan payload yang berisi IV, ciphertext, dan authTag.
+// authTag diperlukan agar penerima bisa memastikan data tidak diubah selama pengiriman.
 function encryptAesGcm(text, key, iv = crypto.randomBytes(IV_BYTES)) {
-  // Tolak ukuran yang tidak didukung agar API tidak menerima kunci/IV yang keliru.
+  // Validasi kunci dan IV harus tepat untuk AES-256-GCM agar tidak terjadi error saat enkripsi.
   if (!Buffer.isBuffer(key) || key.length !== KEY_BYTES) {
     throw new RangeError(`Kunci AES-256 harus berupa ${KEY_BYTES} byte.`);
   }
@@ -22,9 +25,9 @@ function encryptAesGcm(text, key, iv = crypto.randomBytes(IV_BYTES)) {
     throw new RangeError(`IV AES-GCM harus berupa ${IV_BYTES} byte.`);
   }
 
-  // createCipheriv menginisialisasi AES-256-GCM dengan kunci dan IV tersebut.
+  // createCipheriv mempersiapkan mesin enkripsi AES-GCM dengan kunci dan IV tertentu.
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
-  // update memproses plaintext; final menyelesaikan operasi sebelum tag diambil.
+  // update lalu final memproses plaintext; hasilnya disimpan sebagai ciphertext.
   const ciphertext = Buffer.concat([
     cipher.update(String(text), 'utf8'),
     cipher.final()
@@ -32,14 +35,14 @@ function encryptAesGcm(text, key, iv = crypto.randomBytes(IV_BYTES)) {
 
   return {
     algorithm: ALGORITHM,
-    // Hex membuat bytes aman diserialisasi sebagai JSON atau ditampilkan di CLI.
+    // IV dan ciphertext dikonversi ke hex agar mudah dikirim sebagai JSON atau ditampilkan di GUI.
     iv: iv.toString('hex'),
     ciphertext: ciphertext.toString('hex'),
     authTag: cipher.getAuthTag().toString('hex')
   };
 }
 
-// Validasi format hex mencegah Buffer menerima string ganjil/terpotong secara diam-diam.
+// parseHex mengubah string heksadesimal menjadi Buffer dengan validasi panjang yang aman.
 function parseHex(value, name, expectedBytes) {
   if (typeof value !== 'string' || !/^(?:[0-9a-f]{2})*$/i.test(value)) {
     throw new TypeError(`${name} harus berupa string hex yang valid.`);
@@ -51,7 +54,8 @@ function parseHex(value, name, expectedBytes) {
   return bytes;
 }
 
-// GCM tidak menyerahkan plaintext final jika authentication tag gagal diverifikasi.
+// decryptAesGcm memulihkan plaintext hanya jika IV, ciphertext, dan authTag valid.
+// Jika tag tidak cocok, Node akan melempar error sehingga integritas data tetap terjaga.
 function decryptAesGcm(payload, key) {
   if (!payload || payload.algorithm !== ALGORITHM) {
     throw new TypeError(`Payload harus menggunakan ${ALGORITHM}.`);
@@ -60,11 +64,11 @@ function decryptAesGcm(payload, key) {
     throw new RangeError(`Kunci AES-256 harus berupa ${KEY_BYTES} byte.`);
   }
 
-  // Pulihkan field payload ke bytes dan pastikan panjang IV serta tag tepat.
+  // Mengembalikan field payload ke byte agar dapat diproses oleh decipher.
   const iv = parseHex(payload.iv, 'IV', IV_BYTES);
   const ciphertext = parseHex(payload.ciphertext, 'Ciphertext');
   const authTag = parseHex(payload.authTag, 'Authentication tag', AUTH_TAG_BYTES);
-  // Tag wajib dipasang sebelum final; final akan melempar error jika data dimodifikasi.
+  // Tag diset sebelum final agar dekripsi menolak perubahan data.
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
   decipher.setAuthTag(authTag);
   const plaintext = Buffer.concat([

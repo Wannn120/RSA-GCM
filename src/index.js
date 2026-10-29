@@ -1,5 +1,8 @@
 'use strict';
 
+// index.js adalah export aggregator utama dari semua modul source.
+// File ini memudahkan GUI/browser memanggil satu titik akses untuk semuanya,
+// sekaligus menjaga struktur source tetap jelas dan terorganisir.
 module.exports = {
   math: require('./math'),
   primality: require('./primality'),

@@ -1,5 +1,8 @@
 'use strict';
 
+// File test ini menguji fitur end-to-end dari aplikasi: AES, hybrid encryption,
+// tamper detection, benchmark comparison, dan simulasi pengiriman antar pihak.
+// Setiap blok test berfungsi sebagai pengaman agar perubahan di src tidak merusak perilaku aplikasi.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
@@ -14,7 +17,7 @@ const { ServerSimulator } = require('../src/server-simulator');
 // Pasangan kecil ini dipakai bersama agar tes RSA dan hybrid dapat diulang dengan hasil konsisten.
 const pair = generateKeyPairFromPrimes(61n, 53n, 17n);
 
-// Uji terpisah memastikan mode simetris dapat berjalan tanpa membuat pasangan RSA.
+// Uji ini mengecek apakah AES-GCM dapat mengenkripsi dan memulihkan pesan UTF-8 tanpa berubah.
 test('AES-GCM mandiri mengenkripsi dan memulihkan pesan UTF-8', () => {
   const key = generateAesKey();
   const payload = encryptAesGcm('AES saja 🎓', key);
@@ -22,15 +25,14 @@ test('AES-GCM mandiri mengenkripsi dan memulihkan pesan UTF-8', () => {
   assert.equal(payload.algorithm, 'aes-256-gcm');
 });
 
+// Uji ini memastikan perubahan pada ciphertext atau tag autentikasi akan memicu kegagalan dekripsi.
 test('AES-GCM mandiri menolak ciphertext atau authentication tag yang diubah', () => {
   const key = generateAesKey();
   const payload = encryptAesGcm('Pesan autentik', key);
-  // Mengubah bit pertama ciphertext harus membuat verifikasi GCM gagal.
   const changedCiphertext = {
     ...payload,
     ciphertext: `${(Number.parseInt(payload.ciphertext.slice(0, 2), 16) ^ 1).toString(16).padStart(2, '0')}${payload.ciphertext.slice(2)}`
   };
-  // Tag juga bagian autentikasi, sehingga perubahan tag harus ditolak.
   const changedTag = {
     ...payload,
     authTag: `${(Number.parseInt(payload.authTag.slice(0, 2), 16) ^ 1).toString(16).padStart(2, '0')}${payload.authTag.slice(2)}`
@@ -39,7 +41,7 @@ test('AES-GCM mandiri menolak ciphertext atau authentication tag yang diubah', (
   assert.throws(() => decryptAesGcm(changedTag, key));
 });
 
-// Uji batas untuk memastikan hybrid RSA + AES-GCM dapat mengenkripsi dan memulihkan pesan UTF-8.
+// Uji ini memeriksa flow hybrid RSA + AES-GCM: pesan dienkripsi dengan AES dan kunci AES dibungkus RSA.
 test('hybrid RSA + AES-GCM mengembalikan pesan UTF-8', () => {
   const payload = hybridEncrypt('Halo 🎓', pair.publicKey);
   const restored = hybridDecrypt(payload, pair.privateKey);
@@ -50,14 +52,14 @@ test('hybrid RSA + AES-GCM mengembalikan pesan UTF-8', () => {
   assert.equal(Buffer.from(payload.authTag, 'hex').length, 16);
 });
 
-// Uji batas untuk memastikan hybrid RSA + AES-GCM menolak ciphertext atau tag yang diubah.
+// Uji ini memastikan varian CRT tetap aman dan dapat mengembalikan pesan yang sama seperti dekripsi biasa.
 test('hybrid dengan RSA-CRT memulihkan kunci AES dan pesan UTF-8', () => {
   const payload = hybridEncrypt('Hybrid CRT 😊', pair.publicKey);
   const restored = hybridDecryptCrt(payload, pair.privateKey, pair.details.p, pair.details.q);
   assert.equal(restored.text, 'Hybrid CRT 😊');
 });
 
-// Uji batas untuk memastikan perubahan ciphertext atau tag ditolak.
+// Uji ini memastikan perubahan pada ciphertext atau tag akan ditolak walaupun payload hybrid sudah dibungkus RSA.
 test('AES-GCM menolak ciphertext atau authentication tag yang telah diubah', () => {
   const payload = hybridEncrypt('Pesan yang harus autentik', pair.publicKey);
   const firstByte = Number.parseInt(payload.ciphertext.slice(0, 2), 16);
@@ -70,14 +72,13 @@ test('AES-GCM menolak ciphertext atau authentication tag yang telah diubah', () 
   assert.throws(() => hybridDecrypt(changedTag, pair.privateKey));
 });
 
-// Uji batas untuk modulus RSA yang terlalu kecil agar tidak dapat membungkus kunci AES.
+// Uji ini mengecek bahwa modulus RSA yang terlalu kecil tidak dapat membungkus kunci AES 32 byte.
 test('hybrid menolak modulus RSA yang tidak dapat membungkus byte', () => {
   const smallPair = generateKeyPairFromPrimes(3n, 5n, 3n);
   assert.throws(() => hybridEncrypt('Halo', smallPair.publicKey), /lebih besar dari 255/);
 });
 
 test('batch perbandingan memakai n acak unik dan round-trip dua skema', () => {
-  // Selain mencoba kedua algoritma, pastikan sampel menggunakan modulus yang berbeda.
   const { runComparisonBatch } = require('../src/comparison');
   const result = runComparisonBatch({ runs: 8, minPrime: 100, maxPrime: 999, messageBytes: 16 });
   assert.equal(result.rows.length, 8);
@@ -88,14 +89,13 @@ test('batch perbandingan memakai n acak unik dan round-trip dua skema', () => {
   assert.ok(result.summary.hybridDecryptCrtMs.mean >= 0);
 });
 
-// Uji batas untuk jumlah percobaan agar tidak terlalu besar.
+// Uji ini menegaskan bahwa batch comparison harus menolak jumlah runs yang di luar batas yang aman.
 test('batch perbandingan menolak ukuran percobaan di luar batas', () => {
   const { runComparisonBatch } = require('../src/comparison');
   assert.throws(() => runComparisonBatch({ runs: 1001 }), /Jumlah percobaan/);
 });
 
 test('perintah CLI compare mengembalikan data batch untuk dua skema', () => {
-  // Jalankan proses CLI sungguhan agar format JSON publik ikut teruji.
   const cliPath = path.join(__dirname, '..', 'src', 'cli.js');
   const output = execFileSync(process.execPath, [cliPath, 'compare', '5', '100', '999', '16'], {
     encoding: 'utf8'
@@ -106,7 +106,7 @@ test('perintah CLI compare mengembalikan data batch untuk dua skema', () => {
   assert.equal(new Set(result.rows.map(row => row.n)).size, 5);
 });
 
-// Uji checksum untuk memastikan perubahan byte memengaruhi hasil.
+// Uji ini mengecek bahwa tampering satu byte membuat checksum berubah dan terdeteksi.
 test('perubahan byte membuat checksum demo berbeda untuk contoh', () => {
   const original = encodeText('MATDIS');
   const changed = tamperBlock(original, 0, 1n);
@@ -114,7 +114,7 @@ test('perubahan byte membuat checksum demo berbeda untuk contoh', () => {
   assert.deepEqual(original, encodeText('MATDIS'));
 });
 
-// Simulasi server untuk menguji pengiriman pesan antara dua pihak.
+// Uji ini mensimulasikan pengiriman pesan dari Alice ke Bob seperti alur komunikasi aman yang diinginkan.
 test('Alice mengirim pesan UTF-8 kepada Bob', () => {
   const alice = new ServerSimulator('Alice', pair);
   const bob = new ServerSimulator('Bob', pair);

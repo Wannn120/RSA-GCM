@@ -1,8 +1,12 @@
 'use strict';
 
+// File rsa-trace.js menambahkan penjelasan langkah demi langkah untuk proses RSA.
+// Ia tidak mengganti implementasi utama; ia hanya menghasilkan jejak matematis yang dapat
+// ditampilkan di CLI atau GUI agar siswa bisa melihat bagaimana n, phi(n), e, dan d dihitung.
 const { gcdTrace, extendedGcd, modPowTrace } = require('./math');
 const { generateKeyPairFromPrimes } = require('./rsa');
 
+// traceKeyGeneration membangkitkan pasangan kunci dan menyertakan semua langkah penjelasan.
 function traceKeyGeneration(p, q, e) {
   const pair = generateKeyPairFromPrimes(p, q, e);
   const { phi } = pair.details;
@@ -23,10 +27,12 @@ function traceKeyGeneration(p, q, e) {
   };
 }
 
+// traceEncryptBlock menampilkan langkah per langkah operasi c = m^e mod n.
 function traceEncryptBlock(message, publicKey) {
   return modPowTrace(message, publicKey.e, publicKey.n);
 }
 
+// traceDecryptBlock menampilkan langkah per langkah operasi m = c^d mod n.
 function traceDecryptBlock(cipher, privateKey) {
   return modPowTrace(cipher, privateKey.d, privateKey.n);
 }

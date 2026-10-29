@@ -1,5 +1,8 @@
 'use strict';
 
+// cli.js adalah antarmuka command-line untuk project ini.
+// File ini memungkinkan user menjalankan demo, melihat trace RSA, membandingkan skema,
+// dan menguji fitur tanpa membuka browser. Pada dasarnya CLI ini adalah versi terminal dari GUI.
 const readline = require('readline');
 const {
   generateKeyPairFromPrimes,
