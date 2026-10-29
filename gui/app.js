@@ -43,6 +43,7 @@ function gcdTrace(a, b) {
   return { gcd: a, steps };
 }
 
+// fungsi ini digunakan untuk mencetak nilai d atau private key
 function extendedGcd(a, b) {
   let oldR = a;
   let r = b;
@@ -52,6 +53,7 @@ function extendedGcd(a, b) {
   let t = 1n;
   const steps = [];
 
+  // looping menghitunng nilai r selama sisa baginya belum nol 
   while (r !== 0n) {
     const q = oldR / r;
     steps.push({ q, oldR, r, oldS, s, oldT, t });
