@@ -1,6 +1,6 @@
 # Struktur Proyek
 
-## Folder src
+## Folder lib
 
 `math.js` berisi gcd, Extended Euclid, modulo positif, invers modulo, dan modular exponentiation.
 
@@ -34,15 +34,15 @@ Modul `rsa.js` juga menyediakan dekripsi RSA-CRT yang menghitung residu modulo p
 
 `index.js` mengekspor modul utama agar mudah dipakai dari kode lain.
 
-## Folder gui
+## Folder src (GUI)
 
 `index.html` adalah struktur halaman.
 
-`src-loader.js` memuat semua file di `src` ke browser dan mengekspose modul tersebut ke `window.RSA_GCM` agar GUI bisa memakai fungsi crypto tanpa build tool tambahan.
+`src-loader.js` memuat semua file di `lib` ke browser dan mengekspose modul tersebut ke `window.RSA_GCM` agar GUI bisa memakai fungsi crypto tanpa build tool tambahan.
 
 `app.js` adalah bootstrap kecil yang menunggu event `rsa-gcm-ready`, lalu menjalankan UI utama.
 
-`pages.js` berisi semua halaman demo dan renderer UI. Ia memanggil fungsi dari `src` untuk membuat hasil perhitungan, lalu menampilkannya ke dalam template HTML halaman.
+`pages.js` berisi semua halaman demo dan renderer UI. Ia memanggil fungsi dari `lib` untuk membuat hasil perhitungan, lalu menampilkannya ke dalam template HTML halaman.
 
 `styles.css` membuat tampilan dua panel yang terinspirasi pola antarmuka WhatsApp Web, dengan sidebar modul di kiri dan area percakapan/data di kanan.
 
@@ -109,12 +109,12 @@ Alur singkatnya:
 
 ### 4. Alur GUI/browser
 
-- `gui/index.html` memuat `src-loader.js` terlebih dahulu.
-- `src-loader.js` memanggil `loadScript()` untuk setiap file dari `src`.
+- `src/index.html` memuat `src-loader.js` terlebih dahulu.
+- `src-loader.js` memanggil `loadScript()` untuk setiap file dari `lib`.
 - Setelah semua modul selesai dimuat, browser mengirim event `rsa-gcm-ready`.
-- `gui/app.js` menangkap event itu dan menjalankan `RSAUi.init()`.
+- `src/app.js` menangkap event itu dan menjalankan `RSAUi.init()`.
 - `pages.js` lalu merender halaman sesuai tombol yang diklik, misalnya `manualRsa`, `manualHybrid`, `compare`, `tamper`, dan `send`.
-- Pada setiap halaman, fungsi render memanggil modul `src` untuk menghitung nilai, lalu menampilkan hasil dalam bentuk chat, tabel, atau ringkasan statistik.
+- Pada setiap halaman, fungsi render memanggil modul `lib` untuk menghitung nilai, lalu menampilkan hasil dalam bentuk chat, tabel, atau ringkasan statistik.
 
 ### 5. Alur simulasi pengiriman pesan
 
@@ -128,6 +128,6 @@ Alur singkatnya:
 
 ## Prinsip penataan
 
-Folder dibagi berdasarkan tanggung jawab, bukan agar sesuai dengan tampilan referensi. CLI memanggil modul Node.js secara langsung. GUI menggunakan implementasi JavaScript browser yang mandiri sehingga tetap berjalan saat `index.html` dibuka tanpa server. Karena keduanya memiliki implementasi masing-masing, pengujian contoh penting perlu dilakukan pada keduanya agar tidak terjadi perbedaan hasil.
+Folder dibagi berdasarkan tanggung jawab, bukan agar sesuai dengan tampilan referensi. GUI menjadi antarmuka utama; modul logika inti berada di `lib/` agar tidak ditulis ulang di halaman browser. Browser memanggil implementasi JavaScript dari `lib/` melalui bridge yang disiapkan di `src/src-loader.js`. Karena semua perhitungan dimasukkan di satu sumber, pengujian contoh tetap perlu dijalankan untuk memastikan hasil sama saat aplikasi dipakai dari browser.
 
-Halaman GUI tambahan mencakup AES-GCM mandiri, dekripsi RSA-CRT, eksperimen perbandingan RSA biasa dengan hybrid RSA + AES-GCM/CRT, Hybrid RSA + AES-GCM, Perubahan Data, dan Pengiriman Pesan. Halaman perbandingan menampilkan grafik batang, statistik, tabel data lengkap, serta ekspor CSV. GUI memakai Web Crypto API bawaan browser untuk AES-GCM dan memerlukan browser modern dalam konteks aman yang menyediakan `crypto.subtle`. Modul logika Node.js masing-masing tetap berada di `src/aes-gcm.js`, `src/comparison.js`, `src/hybrid.js`, `src/tamper.js`, dan `src/server-simulator.js`.
+Halaman GUI tambahan mencakup AES-GCM mandiri, dekripsi RSA-CRT, eksperimen perbandingan RSA biasa dengan hybrid RSA + AES-GCM/CRT, Hybrid RSA + AES-GCM, Perubahan Data, dan Pengiriman Pesan. Halaman perbandingan menampilkan grafik batang, statistik, tabel data lengkap, serta ekspor CSV. GUI memakai Web Crypto API bawaan browser untuk AES-GCM dan memerlukan browser modern dalam konteks aman yang menyediakan `crypto.subtle`. Modul logika Node.js masing-masing tetap berada di `lib/aes-gcm.js`, `lib/comparison.js`, `lib/hybrid.js`, `lib/tamper.js`, dan `lib/server-simulator.js`.

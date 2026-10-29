@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { gcd, extendedGcd, modInverse, modPow } = require('../src/math');
+const { gcd, extendedGcd, modInverse, modPow } = require('../lib/math');
 
 // Uji batas untuk memastikan fungsi matematika dasar bekerja dengan benar.
 test('gcd Euclid menghasilkan pembagi bersama terbesar', () => {

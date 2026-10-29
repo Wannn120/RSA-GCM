@@ -7,12 +7,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
-const { generateKeyPairFromPrimes } = require('../src/rsa');
-const { hybridEncrypt, hybridDecrypt, hybridDecryptCrt } = require('../src/hybrid');
-const { generateAesKey, encryptAesGcm, decryptAesGcm } = require('../src/aes-gcm');
-const { checksum, tamperBlock } = require('../src/tamper');
-const { encodeText } = require('../src/message-codec');
-const { ServerSimulator } = require('../src/server-simulator');
+const { generateKeyPairFromPrimes } = require('../lib/rsa');
+const { hybridEncrypt, hybridDecrypt, hybridDecryptCrt } = require('../lib/hybrid');
+const { generateAesKey, encryptAesGcm, decryptAesGcm } = require('../lib/aes-gcm');
+const { checksum, tamperBlock } = require('../lib/tamper');
+const { encodeText } = require('../lib/message-codec');
+const { ServerSimulator } = require('../lib/server-simulator');
 
 // Pasangan kecil ini dipakai bersama agar tes RSA dan hybrid dapat diulang dengan hasil konsisten.
 const pair = generateKeyPairFromPrimes(61n, 53n, 17n);
@@ -79,7 +79,7 @@ test('hybrid menolak modulus RSA yang tidak dapat membungkus byte', () => {
 });
 
 test('batch perbandingan memakai n acak unik dan round-trip dua skema', () => {
-  const { runComparisonBatch } = require('../src/comparison');
+  const { runComparisonBatch } = require('../lib/comparison');
   const result = runComparisonBatch({ runs: 8, minPrime: 100, maxPrime: 999, messageBytes: 16 });
   assert.equal(result.rows.length, 8);
   assert.equal(result.allRoundTripsPassed, true);
@@ -91,12 +91,12 @@ test('batch perbandingan memakai n acak unik dan round-trip dua skema', () => {
 
 // Uji ini menegaskan bahwa batch comparison harus menolak jumlah runs yang di luar batas yang aman.
 test('batch perbandingan menolak ukuran percobaan di luar batas', () => {
-  const { runComparisonBatch } = require('../src/comparison');
+  const { runComparisonBatch } = require('../lib/comparison');
   assert.throws(() => runComparisonBatch({ runs: 1001 }), /Jumlah percobaan/);
 });
 
 test('perintah CLI compare mengembalikan data batch untuk dua skema', () => {
-  const cliPath = path.join(__dirname, '..', 'src', 'cli.js');
+  const cliPath = path.join(__dirname, '..', 'lib', 'cli.js');
   const output = execFileSync(process.execPath, [cliPath, 'compare', '5', '100', '999', '16'], {
     encoding: 'utf8'
   });

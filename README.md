@@ -1,6 +1,6 @@
 # RSA-GCM
 
-Proyek Matematika Diskrit untuk mempelajari RSA melalui dua antarmuka yang terpisah: CLI dan GUI statis. CLI tetap dapat digunakan sendiri, sedangkan GUI dapat dibuka langsung dari browser tanpa mengubah fungsi CLI.
+Proyek Matematika Diskrit untuk mempelajari RSA melalui antarmuka GUI statis yang memanggil modul logika dari folder `lib/`. Semua komputasi kriptografi tetap berada di sumber yang terpisah agar alur aplikasi bersih, mudah dianalisis, dan tidak menulis ulang logika di halaman browser.
 
 ## Fitur
 
@@ -29,47 +29,17 @@ Node.js versi 18 atau lebih baru untuk CLI dan test.
 
 GUI membutuhkan browser modern dengan Web Crypto API untuk demo AES-GCM. Browser harus mengizinkan `crypto.subtle` (misalnya pada HTTPS atau localhost). CLI dan test membutuhkan Node.js.
 
-## Menjalankan CLI
-
-Masuk ke folder proyek lalu jalankan:
-
-```bash
-npm start
-```
-
-Atau langsung menjalankan demo:
-
-```bash
-node src/cli.js demo
-```
-
-Contoh perintah lain:
-
-```bash
-node src/cli.js prime 61
-node src/cli.js gcd 3120 17
-node src/cli.js egcd 17 3120
-node src/cli.js modpow 65 17 3233
-node src/cli.js key 61 53 17
-node src/cli.js encrypt 61 53 17 "Halo Matdis"
-node src/cli.js encrypt-crt 61 53 17 "Halo Matdis"
-node src/cli.js aes "Halo Matdis"
-node src/cli.js hybrid 61 53 17 "Halo Matdis"
-node src/cli.js hybrid-crt 61 53 17 "Halo Matdis"
-node src/cli.js compare 100 100 999 128
-```
-
-Argumen perintah `compare` adalah jumlah percobaan, prima minimum, prima maksimum, dan ukuran pesan dalam byte. Semua argumen opsional; nilai default-nya 100, 100, 999, dan 128. Jumlah percobaan dibatasi sampai 1000, nilai prima sampai 1.000.000, dan ukuran pesan sampai 4096 byte.
-
 ## Menjalankan GUI
 
 Buka file berikut dengan browser:
 
 ```text
-gui/index.html
+src/index.html
 ```
 
 GUI hanya HTML, CSS, dan JavaScript statis, tanpa proses instalasi. Jika browser tidak menyediakan Web Crypto API saat file dibuka langsung, jalankan GUI dari konteks aman seperti localhost atau HTTPS.
+
+Sumber logika utama tidak lagi ditulis ulang di dalam file browser. Browser memuat modul dari folder `lib/` via `src/src-loader.js`, sehingga perubahan algoritma hanya dikerjakan di satu tempat.
 
 ## Menjalankan test
 
@@ -118,14 +88,10 @@ Proyek ini dibuat untuk pembelajaran Matematika Diskrit, bukan untuk melindungi 
 matdis-rsa-lab/
   docs/
     STRUKTUR.md
-  gui/
-    index.html
-    styles.css
-    app.js
-  src/
-    benchmark.js
+  lib/
     aes-gcm.js
-    cli.js
+    benchmark.js
+    comparison.js
     format.js
     hybrid.js
     index.js
@@ -137,9 +103,19 @@ matdis-rsa-lab/
     selfcheck.js
     server-simulator.js
     tamper.js
+  src/
+    index.html
+    styles.css
+    app.js
+    pages.js
+    rsa-gui-helpers.js
+    src-loader.js
+    ui-renderers.js
+    ui-shared.js
   tests/
     math.test.js
     rsa.test.js
+    features.test.js
   package.json
   README.md
 ```
@@ -152,15 +128,7 @@ matdis-rsa-lab/
 - Perubahan data: checksum berbobot dan dampak mengubah satu byte. Checksum ini tidak menjamin integritas secara kriptografis.
 - Pengiriman pesan: simulasi lokal Alice ke Bob dengan public key dan private key. Tidak menggunakan jaringan sungguhan.
 
-CLI contoh:
-
-```bash
-node src/cli.js hybrid 61 53 17 "Halo Matdis"
-node src/cli.js tamper MATDIS 0 1
-node src/cli.js send 61 53 17 "Halo Bob"
-```
-
-GUI memisahkan tiga percobaan utama ke halaman masing-masing: RSA manual, AES-GCM + RSA-CRT manual, dan eksperimen acak. Tiap halaman utama menampilkan alur proses, sedangkan dua simulasi manual juga menunjukkan percakapan Alice–Bob, waktu, hasil dekripsi, serta data dan rumus lengkap yang dapat dibuka. Eksperimen acak menampilkan grafik, ringkasan statistik, data sampel, dan ekspor CSV. Modul pendukung seperti pembentukan kunci, uji prima, pangkat modular, AES-GCM mandiri, dan pemeriksaan integritas dikelompokkan di bagian pengamatan tambahan. Gaya utama mengikuti nuansa WhatsApp beraksen hijau, sedangkan ikon modul pengamatan tambahan memakai aksen kuning.
+Fungsi CLI lama tetap dapat dipanggil dari folder `lib/` bila diperlukan untuk eksperimen terminal, tetapi aplikasi utama yang dipakai saat ini adalah GUI dalam `src/`. GUI memisahkan tiga percobaan utama ke halaman masing-masing: RSA manual, AES-GCM + RSA-CRT manual, dan eksperimen acak. Tiap halaman utama menampilkan alur proses, sedangkan dua simulasi manual juga menunjukkan percakapan Alice–Bob, waktu, hasil dekripsi, serta data dan rumus lengkap yang dapat dibuka. Eksperimen acak menampilkan grafik, ringkasan statistik, data sampel, dan ekspor CSV. Modul pendukung seperti pembentukan kunci, uji prima, pangkat modular, AES-GCM mandiri, dan pemeriksaan integritas dikelompokkan di bagian pengamatan tambahan. Gaya utama mengikuti nuansa WhatsApp beraksen hijau, sedangkan ikon modul pengamatan tambahan memakai aksen kuning.
 
 Hybrid ini khusus demonstrasi pendidikan: kunci AES 256-bit dibungkus RSA per byte agar dapat digunakan dengan modulus kecil contoh proyek. RSA textbook tanpa padding dan modulus kecil tidak aman untuk data nyata. Untuk aplikasi produksi, gunakan implementasi kriptografi teruji dengan RSA-OAEP (atau mekanisme pertukaran kunci modern) dan AES-GCM.
 

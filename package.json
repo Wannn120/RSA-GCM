@@ -1,16 +1,14 @@
 {
   "name": "matdis-rsa-lab",
   "version": "1.0.0",
-  "description": "Laboratorium pendidikan RSA, CRT, dan AES-GCM dengan eksperimen CLI dan GUI statis",
+  "description": "Laboratorium pendidikan RSA, CRT, dan AES-GCM dengan antarmuka GUI statis",
   "type": "commonjs",
-  "main": "src/index.js",
+  "main": "lib/index.js",
   "scripts": {
-    "start": "node src/cli.js",
-    "cli": "node src/cli.js",
-    "demo": "node src/cli.js demo",
-    "selfcheck": "node src/selfcheck.js",
+    "start": "node -e \"console.log('Buka file src/index.html di browser untuk menjalankan aplikasi GUI.');\"",
+    "selfcheck": "node lib/selfcheck.js",
     "test": "node --test tests/*.test.js",
-    "benchmark": "node src/benchmark.js"
+    "benchmark": "node lib/benchmark.js"
   },
   "engines": {
     "node": ">=18"

@@ -10,8 +10,8 @@ const {
   encryptBlocks,
   decryptBlocks,
   decryptBlocksCrt
-} = require('../src/rsa');
-const { encodeText, decodeText } = require('../src/message-codec');
+} = require('../lib/rsa');
+const { encodeText, decodeText } = require('../lib/message-codec');
 
 // Uji ini memastikan generator kunci RSA untuk p=61, q=53, e=17 menghasilkan param yang benar.
 // Nilai hasil yang diharapkan ini sangat berguna sebagai referensi saat membandingkan kunci manual.
