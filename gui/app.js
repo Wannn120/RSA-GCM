@@ -26,11 +26,13 @@ function big(value, label = 'nilai') {
 
 function abs(n) { return n < 0n ? -n : n; }
 
+// fungsi ini akan digunakan untuk menghitung nilai e atau calon public key 
 function gcdTrace(a, b) {
-  // Nilai absolut menyederhanakan pembagian; algoritma berhenti ketika sisa menjadi nol.
+  // untuk memastikan bahwa nilainya selalu positif
   a = abs(a);
   b = abs(b);
   const steps = [];
+  // mencatat nilai qonquent dan remainder di setiap perhitungan
   while (b !== 0n) {
     const q = a / b;
     const r = a % b;
@@ -42,7 +44,6 @@ function gcdTrace(a, b) {
 }
 
 function extendedGcd(a, b) {
-  // oldR/r menyimpan sisa; oldS/s dan oldT/t melacak koefisien identitas Bezout.
   let oldR = a;
   let r = b;
   let oldS = 1n;
